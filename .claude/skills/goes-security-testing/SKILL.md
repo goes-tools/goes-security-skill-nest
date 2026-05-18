@@ -872,7 +872,7 @@ Despues de generar todos los archivos:
    - Tests funcionales (CRUD/logica) con epic 'Dominio'
    - Tests de validacion de entrada con epic 'Seguridad'
    - Tests de autorizacion si aplica con epic 'Autenticacion'
-5. **Los comentarios en el codigo van SIN tildes** (ASCII puro). Los strings de metadata (descriptions, steps, stories) SI llevan tildes.
+5. **Los comentarios en el codigo van SIN tildes** (ASCII puro). Los strings de metadata (descriptions, steps, stories, epic, feature, story) deben ir en **espanol** con tildes, para que el reporte HTML generado sea consistente con la interfaz del reporter (que esta toda en espanol).
 6. **Respetar el tsconfig.json del proyecto.** Si `ignoreDeprecations` esta en "5.0", NO cambiarlo a "6.0".
 7. **Cada test debe ser independiente** — no depender del orden de ejecucion ni de estado compartido.
 8. **Usar mocks del ORM** (Prisma, TypeORM, etc.) — no conectar a BD real en unit tests.

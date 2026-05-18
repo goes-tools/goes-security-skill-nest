@@ -43,7 +43,7 @@ class SecurityHtmlReporter {
     this.options = {
       outputPath: options?.outputPath || './reports/security/security-report.html',
       projectName: options?.projectName,
-      reportTitle: options?.reportTitle || 'Security Test Report',
+      reportTitle: options?.reportTitle || 'Reporte de Tests de Seguridad',
     };
   }
 
@@ -174,11 +174,11 @@ class SecurityHtmlReporter {
       `\n📊 Security Report generated: ${absPath}`,
     );
     console.log(
-      `   ${summary.total} tests | ${summary.passed} passed | ${summary.failed} failed | ${reportData.meta.duration}ms`,
+      `   ${summary.total} tests | ${summary.passed} aprobados | ${summary.failed} fallidos | ${reportData.meta.duration}ms`,
     );
 
     if (summary.failed > 0) {
-      console.log(`\n   Failed tests:`);
+      console.log(`\n   Tests fallidos:`);
       for (const t of mergedTests) {
         if (t.status === 'failed') {
           const loc = t.relativePath ? ` (${t.relativePath})` : '';
@@ -1207,6 +1207,96 @@ class SecurityHtmlReporter {
       font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     }
 
+    /* ── Source file context bar (modal) ────────────────────── */
+    .modal-source-file {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      background: #0f1729;
+      border-bottom: 1px solid #2a3a4a;
+      font-size: 12px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    }
+
+    .modal-source-file .source-icon {
+      flex-shrink: 0;
+      width: 14px;
+      height: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #93c5fd;
+    }
+
+    .modal-source-file .source-path {
+      color: #93c5fd;
+      word-break: break-all;
+    }
+
+    .modal-source-file .source-label {
+      color: #4b5563;
+      flex-shrink: 0;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ── Error number badge ─────────────────────────────────── */
+    .error-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .error-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #1a1a2e;
+      border-bottom: 1px solid #2a3a4a;
+    }
+
+    .error-header-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+      flex: 1;
+    }
+
+    .error-header-file {
+      font-size: 12px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      color: #93c5fd;
+      word-break: break-all;
+    }
+
+    .error-header-line {
+      font-size: 11px;
+      color: #fbbf24;
+      flex-shrink: 0;
+    }
+
+    .error-summary {
+      font-size: 12px;
+      color: #d1d5db;
+      line-height: 1.4;
+      padding: 10px 12px;
+      background: rgba(239, 68, 68, 0.05);
+      border-bottom: 1px solid #2a3a4a;
+      word-break: break-word;
+    }
+
     .empty-state {
       display: flex;
       flex-direction: column;
@@ -1337,7 +1427,7 @@ class SecurityHtmlReporter {
           type="text"
           class="search-box"
           id="searchBox"
-          placeholder="Search tests..."
+          placeholder="Buscar tests..."
         />
       </div>
       <div class="sidebar-content" id="sidebarContent">
@@ -1353,10 +1443,10 @@ class SecurityHtmlReporter {
       <div class="header">
         <div class="header-title">${escapedTitle}</div>
         <div class="header-project">${escapedProject}</div>
-        <div class="header-meta">Generated: ${escapedGeneratedAt} &middot; Reporter v${escapedReporterVersion}</div>
+        <div class="header-meta">Generado: ${escapedGeneratedAt} &middot; Reporter v${escapedReporterVersion}</div>
         <div class="header-actions">
           <button class="btn btn-primary" onclick="window.print()">
-            📥 Export PDF
+            📥 Exportar PDF
           </button>
         </div>
       </div>
@@ -1366,16 +1456,16 @@ class SecurityHtmlReporter {
 
       <div class="tests-section">
         <div class="tests-section-header">
-          <div class="tests-header">Test Results</div>
+          <div class="tests-header">Resultados de Tests</div>
           <input
             type="text"
             class="tests-search"
             id="testsSearch"
-            placeholder="Filter test results..."
+            placeholder="Filtrar resultados..."
           />
           <span id="filterPill" class="filter-pill">
             <span id="filterPillLabel"></span>
-            <button class="filter-pill-clear" onclick="clearChartFilter()" title="Clear filter">✕</button>
+            <button class="filter-pill-clear" onclick="clearChartFilter()" title="Limpiar filtro">✕</button>
           </span>
         </div>
         <div class="tests-table" id="testsTable"></div>
@@ -1392,6 +1482,25 @@ class SecurityHtmlReporter {
 
     let currentFilter = 'all';
     let filteredTests = DATA.tests;
+
+    const SEVERITY_ES = {
+      blocker: 'BLOQUEANTE',
+      critical: 'CRÍTICO',
+      high: 'ALTO',
+      normal: 'NORMAL',
+      medium: 'MEDIO',
+      minor: 'MENOR',
+      trivial: 'TRIVIAL',
+      low: 'BAJO',
+    };
+    function sevLabel(sev) { return SEVERITY_ES[sev] || sev.toUpperCase(); }
+
+    const STATUS_ES = {
+      passed: 'APROBADO',
+      failed: 'FALLIDO',
+      skipped: 'N/A',
+    };
+    function statusLabel(st) { return STATUS_ES[st] || st.toUpperCase(); }
 
     function init() {
       buildSidebar();
@@ -1600,14 +1709,14 @@ class SecurityHtmlReporter {
       const statusCard = document.createElement('div');
       statusCard.className = 'chart-card';
       statusCard.innerHTML = \`
-        <div class="chart-title">Test Status</div>
+        <div class="chart-title">Estado de Tests</div>
         \${statusChart}
       \`;
 
       const severityCard = document.createElement('div');
       severityCard.className = 'chart-card';
       severityCard.innerHTML = \`
-        <div class="chart-title">Severity Distribution</div>
+        <div class="chart-title">Distribución por Severidad</div>
         \${severityChart}
       \`;
 
@@ -1636,10 +1745,10 @@ class SecurityHtmlReporter {
 
       if (type === 'status') {
         predicate = (t) => t.status === value;
-        label = 'Status: ' + value;
+        label = 'Estado: ' + value;
       } else if (type === 'severity') {
         predicate = (t) => t.severity === value && !t.naReason && t.status !== 'skipped';
-        label = 'Severity: ' + value;
+        label = 'Severidad: ' + value;
       } else if (type === 'owasp') {
         predicate = (t) => (t.tags || []).includes(value);
         label = value;
@@ -1753,9 +1862,9 @@ class SecurityHtmlReporter {
 
       return \`
         <svg class="chart-svg" viewBox="0 0 \${size} \${size}" width="\${size}" height="\${size}">
-          <path class="chart-segment" data-filter-type="status" data-filter-value="passed" d="\${passPath}" fill="#22c55e" stroke="none"><title>Passed: \${passed} (\${passPercent.toFixed(1)}%)</title></path>
-          \${failPercent > 0 ? \`<path class="chart-segment" data-filter-type="status" data-filter-value="failed" d="\${failPath}" fill="#ef4444" stroke="none"><title>Failed: \${failed} (\${failPercent.toFixed(1)}%)</title></path>\` : ''}
-          \${skipPercent > 0 ? \`<path class="chart-segment" data-filter-type="status" data-filter-value="skipped" d="\${skipPath}" fill="#94a3b8" stroke="none"><title>Skipped: \${skipped} (\${skipPercent.toFixed(1)}%)</title></path>\` : ''}
+          <path class="chart-segment" data-filter-type="status" data-filter-value="passed" d="\${passPath}" fill="#22c55e" stroke="none"><title>Aprobados: \${passed} (\${passPercent.toFixed(1)}%)</title></path>
+          \${failPercent > 0 ? \`<path class="chart-segment" data-filter-type="status" data-filter-value="failed" d="\${failPath}" fill="#ef4444" stroke="none"><title>Fallidos: \${failed} (\${failPercent.toFixed(1)}%)</title></path>\` : ''}
+          \${skipPercent > 0 ? \`<path class="chart-segment" data-filter-type="status" data-filter-value="skipped" d="\${skipPath}" fill="#94a3b8" stroke="none"><title>No Aplicables: \${skipped} (\${skipPercent.toFixed(1)}%)</title></path>\` : ''}
           <circle cx="\${size / 2}" cy="\${size / 2}" r="\${radius * 0.55}" fill="#1e2a3a" pointer-events="none" />
           <text x="\${size / 2}" y="\${size / 2}" text-anchor="middle" dy="0.3em" fill="#e8e8e8" font-size="16" font-weight="bold" pointer-events="none">\${passed}</text>
           <text x="\${size / 2}" y="\${size / 2 + 14}" text-anchor="middle" dy="0.3em" fill="#a0a0a0" font-size="10" pointer-events="none">passed</text>
@@ -1769,7 +1878,7 @@ class SecurityHtmlReporter {
     }
 
     function createSeverityChart() {
-      const severities = ['blocker', 'critical', 'minor'];
+      const severities = ['blocker', 'critical', 'high', 'normal', 'medium', 'minor', 'trivial', 'low'];
       const counts = {};
 
       for (const severity of severities) {
@@ -1795,15 +1904,15 @@ class SecurityHtmlReporter {
       };
 
       const labelMap = {
-        blocker: 'Blocker',
-        critical: 'Critical',
-        high: 'High',
+        blocker: 'Bloqueante',
+        critical: 'Crítico',
+        high: 'Alto',
         normal: 'Normal',
-        medium: 'Medium',
-        minor: 'Minor',
+        medium: 'Medio',
+        minor: 'Menor',
         trivial: 'Trivial',
-        low: 'Low',
-        na: 'Skipped',
+        low: 'Bajo',
+        na: 'N/A',
       };
 
       const bars = severities
@@ -1908,26 +2017,26 @@ class SecurityHtmlReporter {
 
       const stats = [
         {
-          label: 'Total Tests',
+          label: 'Total de Tests',
           value: DATA.summary.total,
         },
         {
-          label: 'Passed',
+          label: 'Aprobados',
           value: DATA.summary.passed,
         },
         {
-          label: 'Failed',
+          label: 'Fallidos',
           value: DATA.summary.failed,
         },
         {
-          label: 'Skipped',
-          value: DATA.summary.skipped,
+          label: 'No Aplicables',
+          value: DATA.summary.notApplicable || DATA.summary.skipped,
         },
       ];
 
 
       stats.push({
-        label: 'Duration',
+        label: 'Duración',
         value: \`\${(DATA.meta.duration / 1000).toFixed(1)}s\`,
       });
 
@@ -1950,7 +2059,7 @@ class SecurityHtmlReporter {
         table.innerHTML = \`
           <div class="empty-state">
             <div class="empty-state-icon">🔍</div>
-            <div class="empty-state-text">No tests match your filter</div>
+            <div class="empty-state-text">No hay tests que coincidan con el filtro</div>
           </div>
         \`;
         return;
@@ -2006,12 +2115,12 @@ class SecurityHtmlReporter {
         const tagsHtml = test.tags.length > 2 ? tags + \`<span class="badge badge-tag badge-other">+\${test.tags.length - 2}</span>\` : tags;
 
         const severityCell = test.naReason
-          ? \`<span class="badge badge-na" title="\${escapeHtml(test.naReason)}">Skipped</span>\`
+          ? \`<span class="badge badge-na" title="\${escapeHtml(test.naReason)}">N/A</span>\`
           : test.severity
-            ? \`<span class="badge badge-severity badge-\${test.severity}">\${test.severity.toUpperCase()}</span>\`
+            ? \`<span class="badge badge-severity badge-\${test.severity}">\${sevLabel(test.severity)}</span>\`
             : '';
 
-        const fileHint = test.status === 'failed' && test.relativePath
+        const fileHint = test.relativePath
           ? \`<div class="test-file-path">\${escapeHtml(test.relativePath)}</div>\`
           : '';
 
@@ -2078,10 +2187,18 @@ class SecurityHtmlReporter {
       }[test.status];
 
       const headerSeverityBadge = test.naReason
-        ? \`<span class="badge badge-na">Skipped</span>\`
+        ? \`<span class="badge badge-na">N/A</span>\`
         : test.severity
-          ? \`<span class="badge badge-severity badge-\${test.severity}">\${test.severity.toUpperCase()}</span>\`
+          ? \`<span class="badge badge-severity badge-\${test.severity}">\${sevLabel(test.severity)}</span>\`
           : '';
+
+      const sourceFileBar = test.relativePath
+        ? \`<div class="modal-source-file">
+            <span class="source-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg></span>
+            <span class="source-label">Spec</span>
+            <span class="source-path">\${escapeHtml(test.relativePath)}</span>
+          </div>\`
+        : '';
 
       let content = \`
         <div class="modal-header">
@@ -2090,6 +2207,7 @@ class SecurityHtmlReporter {
           </div>
           <button class="modal-close" onclick="closeModal()">✕</button>
         </div>
+        \${sourceFileBar}
         <div class="modal-content">
           <div class="modal-section">
             <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap;">
@@ -2114,7 +2232,7 @@ class SecurityHtmlReporter {
         content += \`
           <div class="modal-section">
             <div class="na-callout">
-              <span class="na-callout-label">Not applicable to this project</span>
+              <span class="na-callout-label">No aplicable a este proyecto</span>
               <span class="na-callout-reason">\${escapeHtml(test.naReason)}</span>
             </div>
           </div>
@@ -2124,12 +2242,12 @@ class SecurityHtmlReporter {
       if (test.epic || test.feature || test.story || test.owner) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">Classification</div>
+            <div class="modal-section-title">Clasificación</div>
             <div class="classification-grid">
-              \${test.epic ? \`<div class="classification-item"><div class="classification-label">Epic</div><div class="classification-value">\${escapeHtml(test.epic)}</div></div>\` : ''}
+              \${test.epic ? \`<div class="classification-item"><div class="classification-label">Épica</div><div class="classification-value">\${escapeHtml(test.epic)}</div></div>\` : ''}
               \${test.feature ? \`<div class="classification-item"><div class="classification-label">Feature</div><div class="classification-value">\${escapeHtml(test.feature)}</div></div>\` : ''}
-              \${test.story ? \`<div class="classification-item"><div class="classification-label">Story</div><div class="classification-value">\${escapeHtml(test.story)}</div></div>\` : ''}
-              \${test.owner ? \`<div class="classification-item"><div class="classification-label">Owner</div><div class="classification-value">\${escapeHtml(test.owner)}</div></div>\` : ''}
+              \${test.story ? \`<div class="classification-item"><div class="classification-label">Historia</div><div class="classification-value">\${escapeHtml(test.story)}</div></div>\` : ''}
+              \${test.owner ? \`<div class="classification-item"><div class="classification-label">Responsable</div><div class="classification-value">\${escapeHtml(test.owner)}</div></div>\` : ''}
             </div>
           </div>
         \`;
@@ -2138,7 +2256,7 @@ class SecurityHtmlReporter {
       if (test.description) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">Description</div>
+            <div class="modal-section-title">Descripción</div>
             <div class="description-content">\${test.description}</div>
           </div>
         \`;
@@ -2147,7 +2265,7 @@ class SecurityHtmlReporter {
       if (test.steps.length > 0) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">Steps</div>
+            <div class="modal-section-title">Pasos</div>
             <div class="steps-list">
               \${test.steps
                 .map(
@@ -2163,7 +2281,7 @@ class SecurityHtmlReporter {
       if (test.evidences.length > 0) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">Evidence</div>
+            <div class="modal-section-title">Evidencia</div>
             \${test.evidences
               .map(
                 (evidence) =>
@@ -2187,7 +2305,7 @@ class SecurityHtmlReporter {
       if (allLinks.length > 0) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">References</div>
+            <div class="modal-section-title">Referencias</div>
             <div class="links-list">
               \${allLinks
                 .map(
@@ -2203,46 +2321,51 @@ class SecurityHtmlReporter {
       if (test.errors.length > 0) {
         content += \`
           <div class="modal-section">
-            <div class="modal-section-title">Errors (\${test.errors.length})</div>
+            <div class="modal-section-title">Errores (\${test.errors.length})</div>
             <div class="error-list">
               \${test.errors.map((err, idx) => {
                 const parsed = parseError(err, test.relativePath);
                 const errId = test.id + '-err-' + idx;
                 let html = '<div class="error-item">';
 
-                // File location bar
+                // ── Error header with number badge + file location ──
+                html += '<div class="error-header">';
+                html += \`<span class="error-number">\${idx + 1}</span>\`;
+                html += '<div class="error-header-info">';
                 if (parsed.file) {
-                  html += \`<div class="error-file-bar">
-                    <span class="error-file-icon"></span>
-                    <span class="error-file-path">\${escapeHtml(parsed.file)}</span>
-                    \${parsed.line ? \`<span class="error-file-line">line \${escapeHtml(parsed.line)}</span>\` : ''}
-                  </div>\`;
+                  html += \`<span class="error-header-file">\${escapeHtml(parsed.file)}\`;
+                  if (parsed.line) html += \`<span class="error-header-line"> : \${escapeHtml(parsed.line)}</span>\`;
+                  html += '</span>';
                 }
+                // One-liner summary extracted from the first meaningful line
+                if (parsed.firstLine) {
+                  html += \`<span style="font-size:11px;color:#9ca3af;">\${escapeHtml(parsed.firstLine)}</span>\`;
+                }
+                html += '</div></div>';
 
+                // ── Clean error message body ──
                 html += '<div class="error-body">';
-
-                // Clean error message
                 html += \`<div class="error-message">\${escapeHtml(parsed.message)}</div>\`;
 
                 // Expected vs Received
                 if (parsed.expected || parsed.received) {
                   html += '<div class="error-expected-received">';
-                  if (parsed.expected) html += \`<div class="error-expected"><div class="error-er-label">Expected</div>\${escapeHtml(parsed.expected)}</div>\`;
-                  if (parsed.received) html += \`<div class="error-received"><div class="error-er-label">Received</div>\${escapeHtml(parsed.received)}</div>\`;
+                  if (parsed.expected) html += \`<div class="error-expected"><div class="error-er-label">Esperado</div>\${escapeHtml(parsed.expected)}</div>\`;
+                  if (parsed.received) html += \`<div class="error-received"><div class="error-er-label">Recibido</div>\${escapeHtml(parsed.received)}</div>\`;
                   html += '</div>';
                 }
 
-                // Steps context
+                // Steps context — what was verified
                 if (test.steps && test.steps.length > 0) {
                   html += \`<div class="error-steps-context">
-                    <div class="error-steps-title">What was verified</div>
+                    <div class="error-steps-title">Lo que se verificó</div>
                     <div class="error-steps-list">\${test.steps.map(s => '• ' + escapeHtml(s)).join('<br>')}</div>
                   </div>\`;
                 }
 
-                // Raw stack — tiny toggle at the bottom
+                // Raw stack — toggle at the bottom
                 if (parsed.stack) {
-                  html += \`<button class="error-raw-toggle" onclick="toggleRawStack('\${errId}')">Show raw output</button>
+                  html += \`<button class="error-raw-toggle" onclick="toggleRawStack('\${errId}')">Mostrar salida raw</button>
                     <div class="error-raw-stack" id="raw-\${errId}">\${escapeHtml(parsed.stack)}</div>\`;
                 }
 
@@ -2285,22 +2408,22 @@ class SecurityHtmlReporter {
 
       content += \`
         <div class="modal-section">
-          <div class="modal-section-title">Reproducibility</div>
+          <div class="modal-section-title">Reproducibilidad</div>
           <div class="reproducibility-block">
             <div class="repro-row">
-              <span class="repro-label">File</span>
+              <span class="repro-label">Archivo</span>
               <code class="repro-value">\${escapeHtml(fileForRepro)}</code>
-              <button class="repro-copy" onclick="copyRepro(this)" title="Copy file path">📋</button>
+              <button class="repro-copy" onclick="copyRepro(this)" title="Copiar ruta">📋</button>
             </div>
             <div class="repro-row">
               <span class="repro-label">Test</span>
               <code class="repro-value">\${escapeHtml(test.name || '')}</code>
-              <button class="repro-copy" onclick="copyRepro(this)" title="Copy test name">📋</button>
+              <button class="repro-copy" onclick="copyRepro(this)" title="Copiar nombre">📋</button>
             </div>
             <div class="repro-row">
-              <span class="repro-label">Run</span>
+              <span class="repro-label">Ejecutar</span>
               <code class="repro-value repro-cmd">\${escapeHtml(runCmd)}</code>
-              <button class="repro-copy" onclick="copyRepro(this)" title="Copy command">📋</button>
+              <button class="repro-copy" onclick="copyRepro(this)" title="Copiar comando">📋</button>
             </div>
           </div>
         </div>
@@ -2311,10 +2434,10 @@ class SecurityHtmlReporter {
           <div class="modal-status">
             <div class="status-item">
               <span style="color: \${statusColor}; font-size: 18px;">\${statusIcon}</span>
-              <span>Status: <strong>\${test.status.toUpperCase()}</strong></span>
+              <span>Estado: <strong>\${statusLabel(test.status)}</strong></span>
             </div>
             <div class="status-item">
-              <span>Duration: <strong>\${test.duration}ms</strong></span>
+              <span>Duración: <strong>\${test.duration}ms</strong></span>
             </div>
           </div>
         </div>
@@ -2381,9 +2504,9 @@ class SecurityHtmlReporter {
     // ── Error parser ─────────────────────────────────────────────
     // Extracts file, line, expected/received from raw Jest/Vitest error text.
     function parseError(raw, fallbackFile) {
-      if (!raw) return { message: '', stack: '', file: '', line: '', expected: '', received: '' };
+      if (!raw) return { message: '', stack: '', file: '', line: '', expected: '', received: '', firstLine: '' };
       // Strip ANSI escape codes
-      const clean = raw.replace(/\[[0-9;]*m/g, '').replace(/\x1b\[[0-9;]*m/g, '');
+      const clean = raw.replace(/\\x1b\\[[0-9;]*m/g, '').replace(/\\[[0-9;]*m/g, '');
 
       let file = '';
       let line = '';
@@ -2391,30 +2514,49 @@ class SecurityHtmlReporter {
       let received = '';
 
       // Extract file:line — "at Object.<anonymous> (path/file.ts:42:5)"
-      const atMatch = clean.match(/at\s+(?:Object\.<anonymous>|[\w.]+)\s+\((.+?):(\d+):\d+\)/);
+      const atMatch = clean.match(/at\\s+(?:Object\\.\\<anonymous\\>|[\\w.]+)\\s+\\((.+?):(\\d+):\\d+\\)/);
       if (atMatch) { file = atMatch[1]; line = atMatch[2]; }
 
       // Also try "● path/file.ts" or "> path/file.ts"
       if (!file) {
-        const bulletMatch = clean.match(/^\s*(?:●|>)\s+(.+\.(?:ts|js|tsx|jsx|vue))(?::(\d+))?/m);
+        const bulletMatch = clean.match(/^\\s*(?:●|>)\\s+(.+\\.(?:ts|js|tsx|jsx|vue))(?::(\\d+))?/m);
         if (bulletMatch) { file = bulletMatch[1]; if (bulletMatch[2]) line = bulletMatch[2]; }
       }
 
-      // Extract Expected / Received
-      const expMatch = clean.match(/Expected[:\s]+(.+)/);
-      const recMatch = clean.match(/Received[:\s]+(.+)/);
+      // Try bare path:line:col at the end of a line (Vitest style)
+      if (!file) {
+        const bareMatch = clean.match(/(\\S+\\.(?:ts|js|tsx|jsx|vue)):(\\d+):\\d+/);
+        if (bareMatch) { file = bareMatch[1]; line = bareMatch[2]; }
+      }
+
+      // Extract Expected / Received — support multiword labels
+      const expMatch = clean.match(/Expected(?:\\s+\\w+)*[:\\s]+(.+)/);
+      const recMatch = clean.match(/Received(?:\\s+\\w+)*[:\\s]+(.+)/);
       if (expMatch) expected = expMatch[1].trim();
       if (recMatch) received = recMatch[1].trim();
 
       // Split message from stack trace
       let message = '';
       let stack = '';
-      const stackIdx = clean.indexOf('\n    at ');
+      const stackIdx = clean.indexOf('\\n    at ');
       if (stackIdx > -1) {
         message = clean.substring(0, stackIdx).trim();
         stack = clean.substring(stackIdx).trim();
       } else {
         message = clean.trim();
+      }
+
+      // Extract a clean one-liner summary (first meaningful line)
+      let firstLine = '';
+      const msgLines = message.split('\\n');
+      for (const l of msgLines) {
+        const trimmed = l.replace(/^\\s*[●>]\\s*/, '').trim();
+        if (trimmed && trimmed.length > 5 && !trimmed.match(/^\\s*at\\s/)) {
+          if (!trimmed.match(/^[\\w/\\\\\\.\\-]+\\.(ts|js|tsx|jsx|vue)(:\\d+)?$/)) {
+            firstLine = trimmed.length > 120 ? trimmed.substring(0, 117) + '...' : trimmed;
+            break;
+          }
+        }
       }
 
       // Make absolute paths relative
@@ -2424,7 +2566,7 @@ class SecurityHtmlReporter {
         if (srcIdx > -1) file = parts.slice(srcIdx).join('/');
       }
 
-      return { message, stack, file: file || fallbackFile || '', line, expected, received };
+      return { message, stack, file: file || fallbackFile || '', line, expected, received, firstLine };
     }
 
     function toggleRawStack(errId) {
@@ -2432,7 +2574,7 @@ class SecurityHtmlReporter {
       const btn = el?.previousElementSibling;
       if (el) {
         el.classList.toggle('open');
-        if (btn) btn.textContent = el.classList.contains('open') ? 'Hide raw output' : 'Show raw output';
+        if (btn) btn.textContent = el.classList.contains('open') ? 'Ocultar salida raw' : 'Mostrar salida raw';
       }
     }
 
