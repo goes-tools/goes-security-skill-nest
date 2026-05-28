@@ -964,14 +964,102 @@ puede:
 
 ---
 
-## PASO 7: Verificacion
+## PASO 7: Generar snapshot de configuracion runtime + CI gate (OBLIGATORIO)
+
+> **Esta capa congela los valores que ciberseguridad ya aprobo y bloquea el merge si driftean.**
+> Sin esto, un cambio accidental en `.env.release` (un `unsafe-inline` que se cuela,
+> un `localhost` en CORS, un timeout que sube) llega a produccion sin detectarse.
+
+### 7.1 Generar el snapshot inicial
+
+1. Copiar `.claude/skills/goes-security-testing/references/examples/security.snapshot.example.json`
+   a `test/security/security.snapshot.json`.
+2. Reemplazar `REPLACE_WITH_PROJECT_NAME` y `REPLACE_WITH_PROD_DOMAIN` con
+   los valores reales del proyecto bajo test.
+3. Ejecutar el script `scripts/security-snapshot-update.ts` (copia desde
+   `references/templates/snapshot-update.ts`) que levanta la app y captura
+   los headers reales. Cualquier campo que aparezca como `MISSING` es un
+   **hallazgo** que hay que arreglar ANTES de commitear el snapshot.
+4. Pedir review a ciberseguridad. Mergear solo con su aprobacion.
+
+### 7.2 Agregar el spec que valida contra el snapshot
+
+Copiar `references/test-patterns/31-config-snapshot.md` y crear el spec
+correspondiente: `test/security/snapshot.security-html.spec.ts`. Este spec
+corre en cada PR y reporta drift contra el snapshot aprobado.
+
+### 7.3 Configurar el CI gate
+
+1. Copiar `.claude/skills/goes-security-testing/references/templates/security-gate.yml`
+   a `.github/workflows/security-gate.yml`.
+2. Copiar `references/templates/jest-security-release.config.ts` a
+   `test/security/jest-security-release.config.ts`.
+3. Agregar al `package.json` los scripts:
+   ```json
+   {
+     "scripts": {
+       "test:security:html": "jest --config test/security/jest-security-html.config.ts --verbose",
+       "test:security:release": "jest --config test/security/jest-security-release.config.ts --verbose",
+       "test:security:snapshot:update": "ts-node scripts/security-snapshot-update.ts"
+     }
+   }
+   ```
+4. Copiar `references/examples/CODEOWNERS.example` y mergear su contenido
+   en el `.github/CODEOWNERS` del proyecto. Esto fuerza review de
+   ciberseguridad para cualquier modificacion al snapshot, a los referencias
+   de la skill, o al workflow del gate.
+5. Configurar en el repo de GitHub:
+   - Settings -> Actions -> Variables: `RELEASE_BASE_URL` con la URL del
+     ambiente release/staging.
+   - Settings -> Secrets: `SECURITY_TEST_USER` y `SECURITY_TEST_PASSWORD`
+     con credenciales de un usuario de prueba con rol minimo.
+   - Settings -> Branches -> Branch protection rule en `main`/`master`:
+     - Require status checks to pass before merging
+     - Status checks required: `Security tests (local build)`,
+       `Checklist GOES coverage gate`, y opcionalmente
+       `Security tests (release env)`.
+
+### 7.4 Resultado
+
+A partir de este punto:
+
+- Cualquier PR que rompa un test de seguridad: **merge bloqueado**.
+- Cualquier PR que modifique el snapshot: **requiere review de ciberseguridad**.
+- Cualquier PR a `release/**`: ademas corre la suite contra la URL deployada.
+- El reporte HTML aparece como artifact + comentario en cada PR.
+- Ciberseguridad puede auditar el ultimo reporte HTML antes de cada
+  ventana de despliegue.
+
+### 7.5 Cuando un nuevo hallazgo aparece en pentest
+
+El flujo cierra el ciclo:
+
+1. Ciberseguridad reporta un nuevo `VULN-XXX-NNNN`.
+2. Equipo de desarrollo agrega la entrada al
+   `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
+3. Equipo crea `test/security/regression/VULN-XXX-NNNN.regression.spec.ts`
+   siguiendo `references/regression-template.md`.
+4. Si el hallazgo es de runtime, actualizar tambien el snapshot.
+5. El nuevo spec corre desde el primer commit. Si la defensa esta
+   implementada → verde. Si no → rojo, y el merge se bloquea hasta arreglar.
+
+A futuro, ese mismo `VULN-XXX-NNNN` queda activo para CUALQUIER otro
+proyecto que use la skill — porque vive en `.claude/skills/`, no en el
+proyecto especifico.
+
+---
+
+## PASO 8: Verificacion
 
 Despues de generar todos los archivos:
 
 1. Ejecutar `npm run test:security:html` para verificar que todos los tests pasan y el reporte se genera
 2. Si hay errores de ESLint, corregirlos (especialmente require-await en archivos de test)
 3. Verificar que `reports/security/security-report.html` se genero correctamente
-4. Mostrar resumen: cuantos tests generados, cuantos items del checklist cubiertos, cuantos OWASP cubiertos
+4. Verificar que **todos los VULN-IDs activos del `pentest-history.yaml` tienen un spec en `test/security/regression/`**
+5. Verificar que **`test/security/security.snapshot.json` existe y fue aprobado por ciberseguridad**
+6. Verificar que **`.github/workflows/security-gate.yml` esta committeado y el branch protection esta activo**
+7. Mostrar resumen: cuantos tests generados, cuantos items del checklist cubiertos, cuantos OWASP cubiertos, cuantos VULN-IDs en regresion
 
 ---
 

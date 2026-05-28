@@ -1,0 +1,19 @@
+# Agregar al .github/CODEOWNERS del proyecto.
+# Cualquier cambio a estos archivos requiere aprobacion de TODOS los listados
+# (GitHub pide review a cada uno; con branch protection "Require review from
+# Code Owners" activado, el merge queda bloqueado hasta que aprueben).
+#
+# Para reducir la lista de aprobadores requeridos a 1 (en vez de todos),
+# crear un team en GitHub y reemplazar los usuarios por @goes-tools/<team>.
+
+# Snapshot de seguridad — cualquiera de los siguientes puede aprobar
+/test/security/security.snapshot.json   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+
+# Configuracion de skill — cualquiera de los siguientes puede aprobar
+/.claude/skills/goes-security-testing/  @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+
+# CI gate de seguridad — cualquiera de los siguientes puede aprobar
+/.github/workflows/security-gate.yml    @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+
+# pentest-history.yaml — cualquiera de los siguientes puede aprobar
+/.claude/skills/goes-security-testing/references/pentest-history.yaml   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev

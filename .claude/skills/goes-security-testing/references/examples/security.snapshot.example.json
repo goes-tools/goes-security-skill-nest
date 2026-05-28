@@ -1,0 +1,146 @@
+{
+  "$schema": "https://goes.gob.sv/security-snapshot.v1.json",
+  "version": 1,
+  "project": "REPLACE_WITH_PROJECT_NAME",
+  "approved_by": "@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev",
+  "approved_at": "YYYY-MM-DD",
+  "notes": "Snapshot inicial generado por la skill goes-security-testing. Cualquier cambio requiere PR aprobado por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev segun CODEOWNERS.",
+
+  "headers": {
+    "content-security-policy": [
+      "^default-src 'self'",
+      "script-src[^;]+'self'",
+      "style-src[^;]+'self'",
+      "frame-ancestors[^;]+'none'"
+    ],
+    "content-security-policy-NOT": [
+      "unsafe-inline",
+      "unsafe-eval",
+      "unsafe-hashes",
+      "\\*"
+    ],
+    "strict-transport-security": [
+      "^max-age=31536000",
+      "includeSubDomains",
+      "preload"
+    ],
+    "x-content-type-options": ["^nosniff$"],
+    "x-frame-options": ["^(DENY|SAMEORIGIN)$"],
+    "x-xss-protection": ["^0$"],
+    "referrer-policy": ["^strict-origin-when-cross-origin$"],
+    "permissions-policy": [
+      "geolocation=\\(\\)",
+      "camera=\\(\\)",
+      "microphone=\\(\\)"
+    ],
+    "cache-control": ["no-store"],
+    "cross-origin-resource-policy": ["^same-origin$"],
+    "cross-origin-opener-policy": ["^same-origin$"],
+    "cross-origin-embedder-policy": ["^require-corp$"],
+
+    "server": null,
+    "x-powered-by": null,
+    "x-cloud-trace-context": null,
+    "via": null,
+    "x-aspnet-version": null,
+    "x-aspnetmvc-version": null,
+    "x-ratelimit-limit-short": null,
+    "x-ratelimit-limit-medium": null,
+    "x-ratelimit-limit-long": null,
+    "x-ratelimit-remaining": null,
+    "x-ratelimit-reset": null
+  },
+
+  "cors": {
+    "allowed_origins": [
+      "https://REPLACE_WITH_PROD_DOMAIN.srs.gob.sv"
+    ],
+    "allowed_origins_NOT": [
+      "http://localhost",
+      "https://srs-example-app-",
+      "https://.*\\.run\\.app",
+      "\\*"
+    ],
+    "allowed_methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    "max_age_seconds": 3600,
+    "credentials": true
+  },
+
+  "session": {
+    "access_token_ttl_minutes": 5,
+    "refresh_token_ttl_days": 7,
+    "idle_timeout_minutes": 30,
+    "cookie": {
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Strict",
+      "path": "/"
+    }
+  },
+
+  "rate_limit": {
+    "general_per_minute": 100,
+    "login_per_minute": 5,
+    "verify_dui_per_minute": 5,
+    "register_per_minute": 5,
+    "exposed_in_headers": false
+  },
+
+  "error_response": {
+    "allowed_keys": ["statusCode", "message", "error"],
+    "forbidden_keys": [
+      "path",
+      "timestamp",
+      "stack",
+      "cause",
+      "sql",
+      "query",
+      "url",
+      "request",
+      "req"
+    ]
+  },
+
+  "csp_unsafe_keywords_forbidden": [
+    "unsafe-inline",
+    "unsafe-eval",
+    "unsafe-hashes",
+    "unsafe-allow-redirects"
+  ],
+
+  "response_dto": {
+    "forbidden_field_names": [
+      "password",
+      "passwordHash",
+      "password_hash",
+      "hash",
+      "salt",
+      "refreshToken",
+      "refresh_token",
+      "resetToken",
+      "reset_token",
+      "emailVerifiedToken",
+      "totpSecret"
+    ],
+    "forbidden_value_patterns": [
+      { "name": "DUI completo", "pattern": "\\d{8}-\\d" },
+      { "name": "CUID Prisma", "pattern": "^c[a-z0-9]{24}$" },
+      { "name": "bcrypt hash", "pattern": "^\\$2[aby]\\$\\d{2}\\$" },
+      { "name": "JWT en payload publico", "pattern": "^eyJ[A-Za-z0-9_-]+\\." }
+    ]
+  },
+
+  "captcha": {
+    "required_on_public_endpoints": [
+      "/api/auth/register",
+      "/api/auth/login",
+      "/api/auth/forgot-password",
+      "/api/auth/recover-password",
+      "/api/auth/verify-dui",
+      "/api/auth/verify-email",
+      "/api/contact"
+    ],
+    "provider": "recaptcha-v3",
+    "minimum_score": 0.7
+  }
+}

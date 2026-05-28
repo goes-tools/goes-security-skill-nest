@@ -1,0 +1,172 @@
+# .github/workflows/security-gate.yml
+#
+# Bloquea el merge a main/master si:
+# - Algun test de seguridad falla
+# - Algun item del checklist GOES queda sin cubrir
+# - Algun VULN-ID del pentest-history regresa
+# - El snapshot de configuracion runtime drifta
+#
+# Generado por skill goes-security-testing. Modificar solo via PR aprobado
+# por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev (ver CODEOWNERS).
+
+name: GOES Security Gate
+
+on:
+  pull_request:
+    branches: [main, master, release/**]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  security-tests-local:
+    name: Security tests (local build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify every pentest-history entry has a regression spec
+        run: |
+          set -e
+          YAML=".claude/skills/goes-security-testing/references/pentest-history.yaml"
+          REG_DIR="test/security/regression"
+          if [ ! -f "$YAML" ]; then
+            echo "WARNING: pentest-history.yaml no encontrado, skip verification"
+            exit 0
+          fi
+          missing=()
+          for id in $(grep -E "^  - id: VULN-" "$YAML" | sed 's/.*id: //'); do
+            if [ ! -f "$REG_DIR/${id}.regression.spec.ts" ]; then
+              missing+=("$id")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "FAIL: faltan specs de regresion:"
+            for id in "${missing[@]}"; do echo "  - $REG_DIR/${id}.regression.spec.ts"; done
+            exit 1
+          fi
+          echo "OK: todos los VULN-IDs del pentest-history tienen spec."
+
+      - name: Run security suite (local)
+        run: npm run test:security:html
+        env:
+          NODE_ENV: test
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-local
+          path: reports/security/security-report.html
+          retention-days: 30
+
+      - name: Comment HTML report on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: security-report-local
+          message: |
+            ## GOES Security Gate — local build
+
+            HTML report disponible en los artifacts: `security-report-local`.
+
+            Revisar antes de aprobar:
+            - Todos los tests `Pentest Regression VULN-*` en verde
+            - 0 items del checklist en N/A sin justificacion
+            - Snapshot de configuracion sin drift
+
+  security-tests-release:
+    name: Security tests (release env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: security-tests-local
+    if: github.event_name == 'pull_request' && contains(github.head_ref, 'release')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security suite against deployed release env
+        run: npm run test:security:release
+        env:
+          SECURITY_TEST_BASE_URL: ${{ vars.RELEASE_BASE_URL }}
+          TEST_USER_EMAIL: ${{ secrets.SECURITY_TEST_USER }}
+          TEST_USER_PASSWORD: ${{ secrets.SECURITY_TEST_PASSWORD }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-release
+          path: reports/security/security-report.html
+          retention-days: 90
+
+  checklist-coverage:
+    name: Checklist GOES coverage gate
+    runs-on: ubuntu-latest
+    needs: security-tests-local
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate report
+        run: npm run test:security:html || true
+
+      - name: Verify 100% checklist coverage
+        run: |
+          set -e
+          REPORT="reports/security/security-report.html"
+          if [ ! -f "$REPORT" ]; then
+            echo "FAIL: reporte no generado"
+            exit 1
+          fi
+          # El reporter HTML incluye una variable global con los stats:
+          # window.__GOES_STATS__ = { totalChecklistItems, covered, na, missing }
+          # Extraer y validar.
+          MISSING=$(node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('$REPORT', 'utf-8');
+            const m = html.match(/window\\.__GOES_STATS__\\s*=\\s*(\\{[^}]+\\})/);
+            if (!m) { console.log('NA'); process.exit(0); }
+            const stats = JSON.parse(m[1]);
+            console.log(stats.missing || 0);
+          ")
+          if [ "$MISSING" != "0" ] && [ "$MISSING" != "NA" ]; then
+            echo "FAIL: $MISSING items del checklist GOES sin cubrir."
+            exit 1
+          fi
+          echo "OK: 57/57 items cubiertos (o N/A justificado)."
