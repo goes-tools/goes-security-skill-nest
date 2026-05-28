@@ -885,6 +885,85 @@ Estas son las secciones de la Guia de Desarrollo Seguro GOES que deben mapearse 
 
 ---
 
+## PASO 6.5: Generar tests de regresion desde pentest-history.yaml (OBLIGATORIO)
+
+> **Esta capa es la que impide que un hallazgo del pentest vuelva a aparecer.**
+> Mientras los patterns (`test-patterns/*.md`) son la doctrina general, los
+> specs de regresion son la **memoria especifica** de lo que ya se rompio una vez.
+
+### Que hacer
+
+1. Leer `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
+   Es la lista de hallazgos historicos que ciberseguridad ya reporto en
+   proyectos GOES anteriores.
+
+2. Para cada entrada con `status: active | closed | accepted_risk`, generar
+   un archivo:
+
+   ```
+   test/security/regression/<VULN-ID>.regression.spec.ts
+   ```
+
+   Siguiendo EXACTAMENTE la estructura documentada en
+   `.claude/skills/goes-security-testing/references/regression-template.md`.
+
+3. Cada spec contiene UN solo `it()`, con:
+   - Tag `Pentest Regression` + el `regression_tag` exacto del YAML
+   - Reproduccion del ataque del campo `reproduce.request`
+   - Assertions traducidas mecanicamente desde `expected_defense`
+   - Descripcion con referencia al PDF original
+
+4. NO modificar el codigo de `src/`. Si la defensa no esta implementada, el
+   test falla en rojo — eso es exactamente el comportamiento esperado de
+   un test de regresion en un proyecto nuevo.
+
+5. Si la superficie del proyecto no existe (ej. el proyecto no tiene
+   endpoint `/api/reports/permits`), el spec se genera igual pero usa
+   `t.notApplicable('endpoint /api/reports/permits no existe en este proyecto')`.
+   El reporter lo muestra como skipped con badge N/A y referencia al
+   VULN-ID. Trazabilidad: 100%.
+
+### Reglas operativas inmutables
+
+- **Un archivo = un VULN-ID.** Sin agrupar, sin compartir.
+- **Un solo `it()` por archivo.** El que reproduce el ataque del PDF.
+- **NUNCA borrar un spec de regresion** — solo cambia el `status` del YAML.
+- **Cuando ciberseguridad reporta un hallazgo NUEVO**: agregar entrada al
+  YAML (no sobrescribir las anteriores), crear el spec, commit. La proxima
+  vez que la skill corra sobre cualquier proyecto, ese hallazgo queda
+  cubierto desde el dia 1.
+- **Cuando un VULN-ID se cierra**: el spec sigue corriendo en verde. NO se
+  elimina. Esa es la prueba viva de que sigue arreglado.
+
+### Trazabilidad en el reporte HTML
+
+El reporter ya muestra los tags. Con esta capa, el equipo de ciberseguridad
+puede:
+
+1. Abrir el reporte HTML del ultimo build.
+2. Buscar "Pentest Regression" en el sidebar.
+3. Ver los 9 (o N) hallazgos historicos con estado actual:
+   - Verde = defendido en este proyecto
+   - Rojo = hallazgo presente, requiere arreglo INMEDIATO
+   - Amarillo N/A = superficie no existe o riesgo aceptado
+4. Si el pentest del trimestre reporta uno de estos VULN-IDs que esta en
+   verde → **el reporte HTML es la evidencia de que la regla habia sido
+   verificada**, lo cual cambia la conversacion de "fallo del equipo" a
+   "necesidad de re-verificar la implementacion en prod vs staging".
+
+### Glosario para ciberseguridad
+
+| Tag en el reporte | Significa |
+|---|---|
+| `Pentest Regression VULN-INT-NNNN` | Hallazgo historico del panel interno |
+| `Pentest Regression VULN-EXT-NNNN` | Hallazgo historico del portal externo |
+| Verde sin N/A | Defensa verificada activamente |
+| Amarillo N/A "endpoint no existe" | Superficie ausente en este proyecto |
+| Amarillo N/A "Riesgo aceptado segun ADR-NN" | Decision de negocio documentada |
+| Rojo | **Hallazgo regresado — falla el build** |
+
+---
+
 ## PASO 7: Verificacion
 
 Despues de generar todos los archivos:
@@ -914,4 +993,11 @@ Despues de generar todos los archivos:
 11. **El reporter html-reporter.js DEBE ser JavaScript puro** — Jest carga reporters con `require()`, no pasa por ts-jest. Si necesitas modificarlo, no lo conviertas a TypeScript.
 12. **Los archivos de spec deben terminar en `.security-html.spec.ts`** — este es el patron que el jest config busca.
 13. **Cada test DEBE registrar al menos un par input + output en `t.evidence(...)`** — un evidence sin contraparte es incompleto. El primero captura el estado/payload de entrada, el segundo el resultado/respuesta. Ver "Regla critica: evidence (input + output)" mas arriba para nombres recomendados por tipo de test.
-14. **Modo audit-only (opt-in via prompt)** — si el usuario incluye en su mensaje una instruccion del tipo *"NO modifiques codigo fuente"*, *"solo generar tests sin arreglar src/"*, *"audit-only mode"* o equivalente, respetarla estrictamente: dejar tests rojos como hallazgos, NO tocar archivos de aplicacion (`src/`, `main.ts`, controllers, services, DTOs, guards), solo modificar `test/security/`, `package.json`, `eslint.config.mjs`, `.gitignore` y `.claude/`. Si el usuario NO lo pide explicitamente, Claude tiene el comportamiento estandar (puede sugerir y aplicar fixes si lo considera apropiado).
+14. **Pentest regression specs**: ademas de los patterns, generar
+    `test/security/regression/VULN-XXX-NNNN.regression.spec.ts` por cada
+    entrada activa en `references/pentest-history.yaml` siguiendo
+    `references/regression-template.md`. La skill NO puede dejar fuera
+    un VULN-ID con status `active`, `closed` o `accepted_risk`. Si la
+    superficie no existe en el proyecto bajo test, usar
+    `t.notApplicable('motivo verificable con grep')`.
+15. **Modo audit-only (opt-in via prompt)** — si el usuario incluye en su mensaje una instruccion del tipo *"NO modifiques codigo fuente"*, *"solo generar tests sin arreglar src/"*, *"audit-only mode"* o equivalente, respetarla estrictamente: dejar tests rojos como hallazgos, NO tocar archivos de aplicacion (`src/`, `main.ts`, controllers, services, DTOs, guards), solo modificar `test/security/`, `package.json`, `eslint.config.mjs`, `.gitignore` y `.claude/`. Si el usuario NO lo pide explicitamente, Claude tiene el comportamiento estandar (puede sugerir y aplicar fixes si lo considera apropiado).
