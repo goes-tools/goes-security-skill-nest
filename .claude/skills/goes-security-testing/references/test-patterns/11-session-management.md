@@ -10,7 +10,7 @@
 >   reaches the reporter.
 > - `attach(name, data)` is now async — call it as `await attach(...)`.
 
-**Covers:** R17 (Session ID Entropy), R18 (Session Fixation Prevention), R35 (Session Inactivity Timeout)
+**Covers:** R13 (Token Lifetime), R17 (Session ID Entropy), R18 (Session Fixation Prevention), R32 (Refresh Rotation), R35 (Session Inactivity Timeout — INCLUYE idle timeout independiente del exp del JWT, regresion VULN-EXT-0005)
 
 ```typescript
 it('should generate session IDs with sufficient entropy', async () => {
@@ -137,6 +137,142 @@ it('should expire session after inactivity timeout', async () => {
   await attach('Session timeout result (output)', {
     tokenExpired: true,
     accessDenied: true,
+  });
+  await allure.flush();
+});
+
+it('PENTEST R35 — refresh token with valid exp MUST be rejected after 30min idle', async () => {
+  const allure = new AllureCompat();
+  const attach = attachFor(allure);
+  await allure.epic('Seguridad');
+  await allure.feature('Session Inactivity Timeout');
+  await allure.story('Idle timeout independiente de exp del token — sesion muere por inactividad');
+  await allure.severity('blocker');
+  await allure.tag('Pentest');
+  await allure.tag('OWASP A07');
+  await allure.tag('GOES Checklist R35');
+  await allure.tag('Pentest Regression VULN-EXT-0005');
+  await allure.description(
+    '## Vulnerability Prevented\n' +
+    '**Stale Session Hijack** — VULN-EXT-0005 del pentest del 27/05/2026:\n' +
+    'el refresh token tiene exp de 7 dias, pero NO hay control de inactividad.\n' +
+    'Un atacante con acceso fisico a la terminal puede retomar una sesion\n' +
+    'abandonada por dias sin re-autenticacion.\n\n' +
+    '## Defense Implemented\n' +
+    'El servidor mantiene `lastActivityAt` por sesion. En cada request privado\n' +
+    'verifica que `now() - lastActivityAt <= IDLE_TIMEOUT_MIN` (default 30 min).\n' +
+    'Si excede, retorna 401 y revoca la sesion AUNQUE el JWT siga vigente.\n\n' +
+    '## Reference\n' +
+    'GOES Guide Seccion 4.2 — Session Management\n' +
+    'GOES Checklist v2 R35 — "si no se detecta actividad por 30 min se saca de la sesion"',
+  );
+
+  // ===== Capa 1: config =====
+  const idleTimeoutMin = parseInt(process.env.IDLE_TIMEOUT_MIN || '30', 10);
+  expect(idleTimeoutMin).toBeGreaterThanOrEqual(15);
+  expect(idleTimeoutMin).toBeLessThanOrEqual(30);
+  await allure.parameter('idle_timeout_min', idleTimeoutMin.toString());
+
+  // ===== Capa 2: aplicacion — el guard / strategy DEBE leer lastActivityAt =====
+  const fs = require('fs');
+  const path = require('path');
+  const glob = require('glob');
+  const stripComments = (src: string): string =>
+    src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  const guardFiles = glob.sync('src/**/*.{guard,strategy}.ts', {
+    cwd: path.resolve(__dirname, '../..'),
+    absolute: true,
+  });
+  const aggregated = guardFiles
+    .map((f: string) => stripComments(fs.readFileSync(f, 'utf-8')))
+    .join('\n');
+
+  const tracksLastActivity =
+    /lastActivityAt|last_activity|idleTimeout|lastSeen|inactivity/.test(aggregated);
+
+  await attach('Guard static analysis (input)', {
+    guardsScanned: guardFiles.length,
+    tracksLastActivity,
+  });
+  expect(tracksLastActivity).toBe(true);
+
+  // ===== Capa 3: comportamiento E2E con fake timers =====
+  await allure.step('Preparar: login y obtener refresh token con exp lejana', async () => {
+    const refreshToken = jwtService.sign(
+      { sub: 'user-1', type: 'refresh' },
+      { expiresIn: '7d' }, // exp valido por 7 dias
+    );
+    mockRequest.headers.authorization = `Bearer ${refreshToken}`;
+
+    // Simular que la ultima actividad fue hace 31 min
+    await sessionRepository.update(
+      { userId: 'user-1' },
+      { lastActivityAt: new Date(Date.now() - 31 * 60 * 1000) },
+    );
+  });
+
+  await allure.step('Ejecutar: GET protegido tras 31 min de inactividad', async () => {
+    // El guard debe rechazar a pesar de que exp del token sigue vigente
+    await expect(guard.canActivate(mockContext)).rejects.toThrow(/inactiv|idle|session/i);
+  });
+
+  await allure.step('Verificar: sesion fue revocada del lado servidor', async () => {
+    const session = await sessionRepository.findOne({ where: { userId: 'user-1' } });
+    expect(session?.revokedAt).toBeDefined();
+  });
+
+  await attach('Idle timeout enforcement (output)', {
+    tokenExpStillValid: true,
+    idleMinutesElapsed: 31,
+    requestRejected: true,
+    sessionRevoked: true,
+  });
+  await allure.flush();
+});
+
+it('PENTEST R13/R35 — refresh token rotation MUST update lastActivityAt', async () => {
+  const allure = new AllureCompat();
+  const attach = attachFor(allure);
+  await allure.epic('Seguridad');
+  await allure.feature('Session Inactivity Timeout');
+  await allure.story('Cada uso valido del refresh token actualiza lastActivityAt y rota el token');
+  await allure.severity('critical');
+  await allure.tag('Auth');
+  await allure.tag('GOES Checklist R32');
+  await allure.tag('GOES Checklist R35');
+  await allure.tag('Pentest Regression VULN-EXT-0005');
+
+  let initialLastActivity: Date;
+  let updatedLastActivity: Date;
+  let firstRefreshToken: string;
+  let secondRefreshToken: string;
+
+  await allure.step('Preparar: capturar lastActivityAt inicial y refresh token', async () => {
+    const session = await sessionRepository.findOne({ where: { userId: 'user-1' } });
+    initialLastActivity = session!.lastActivityAt;
+    firstRefreshToken = jwtService.sign({ sub: 'user-1' }, { expiresIn: '7d' });
+  });
+
+  await allure.step('Ejecutar: rotacion del refresh token', async () => {
+    // Avanzar 5 minutos (dentro del idle window)
+    jest.useFakeTimers().setSystemTime(Date.now() + 5 * 60 * 1000);
+    const result = await service.refresh(firstRefreshToken);
+    secondRefreshToken = result.refreshToken;
+  });
+
+  await allure.step('Verificar: lastActivityAt actualizado + token rotado', async () => {
+    const session = await sessionRepository.findOne({ where: { userId: 'user-1' } });
+    updatedLastActivity = session!.lastActivityAt;
+    expect(updatedLastActivity.getTime()).toBeGreaterThan(initialLastActivity.getTime());
+    expect(secondRefreshToken).not.toBe(firstRefreshToken);
+  });
+
+  jest.useRealTimers();
+
+  await attach('Rotation + activity tracking (output)', {
+    activityTracked: true,
+    tokenRotated: true,
   });
   await allure.flush();
 });

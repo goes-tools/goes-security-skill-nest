@@ -10,7 +10,7 @@
 >   reaches the reporter.
 > - `attach(name, data)` is now async — call it as `await attach(...)`.
 
-**Covers:** R6 (Public Site Config), R8 (Generic Error Messages), R22 (Unknown Route Handling)
+**Covers:** R6 (Public Site Config), R8 (Generic Error Messages — incluye prohibicion de `path`/`timestamp`/`stack` en body, regresion VULN-EXT-0013), R22 (Unknown Route Handling)
 
 ```typescript
 it('should return generic error messages without exposing internals', async () => {
@@ -97,6 +97,149 @@ it('should return 404 for undefined routes', async () => {
   }
 
   await attach('Routes tested (output)', { routes: undefinedRoutes, all404: true });
+  await allure.flush();
+});
+
+it('PENTEST R8 — error body MUST NOT contain path, timestamp, or internal field names', async () => {
+  const allure = new AllureCompat();
+  const attach = attachFor(allure);
+  await allure.epic('Seguridad');
+  await allure.feature('Generic Error Messages');
+  await allure.story('Las respuestas de error son exclusivamente {statusCode, message} genericos');
+  await allure.severity('critical');
+  await allure.tag('Pentest');
+  await allure.tag('OWASP A05');
+  await allure.tag('OWASP A09');
+  await allure.tag('GOES Checklist R8');
+  await allure.tag('Pentest Regression VULN-EXT-0013');
+  await allure.description(
+    '## Vulnerability Prevented\n' +
+    '**Information Disclosure via Error Payload** — VULN-EXT-0013 del pentest\n' +
+    'del 27/05/2026 reporto que /api respondia con\n' +
+    '`{"statusCode":400,"message":"...","timestamp":"2026-05-26T12:41:08.569Z",\n' +
+    '"path":"/api/auth/login"}`. El campo `path` permite enumerar endpoints,\n' +
+    'y el `timestamp` con ms permite ataques de temporizacion.\n\n' +
+    '## Defense Implemented\n' +
+    'El `HttpExceptionFilter` global retorna SOLO `{statusCode, message}`.\n' +
+    'Path, timestamp, headers, req.url, stack quedan exclusivamente en logs.\n\n' +
+    '## Reference\n' +
+    'GOES Guide Seccion 9.1 — Secure Errors',
+  );
+
+  // ===== Capa 3: comportamiento E2E =====
+  // Ajustar el setup para usar la app real con AppModule
+  // Endpoints que tipicamente disparan distintos tipos de error
+  const errorTriggers = [
+    { path: '/api/auth/login', body: { malformed: true }, label: '400 desde DTO invalido' },
+    { path: '/api/nonexistent-resource', body: {}, label: '404' },
+    { path: '/api/users/999999999', body: null, label: '404 ID inexistente' },
+    { path: '/api/auth/register', body: { email: 'not-an-email' }, label: '400 email invalido' },
+  ];
+
+  const forbiddenFields = ['path', 'timestamp', 'stack', 'cause', 'sql', 'query', 'url'];
+  const forbiddenSubstrings = [
+    /\.ts:\d+/,                           // stack frames "file.ts:42"
+    /node_modules/,
+    /\/(home|Users|var|opt|app)\//,        // rutas absolutas del FS
+    /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/, // ISO timestamps
+    /prisma|typeorm|sequelize/i,
+    /process\.env/,
+    /Error:\s+/,                           // "Error: relation does not exist"
+  ];
+
+  for (const trigger of errorTriggers) {
+    await allure.step(`Test: ${trigger.label} en ${trigger.path}`, async () => {
+      const res = await request(app.getHttpServer())
+        .post(trigger.path)
+        .send(trigger.body ?? {});
+
+      await attach(`Response body para ${trigger.path} (output)`, {
+        status: res.status,
+        body: res.body,
+      });
+
+      // El body debe ser un objeto plano con SOLO statusCode y message
+      const keys = Object.keys(res.body || {});
+      for (const forbidden of forbiddenFields) {
+        expect(keys).not.toContain(forbidden);
+      }
+      // Verificar que ninguna substring prohibida esta en el JSON serializado
+      const json = JSON.stringify(res.body || {});
+      for (const re of forbiddenSubstrings) {
+        expect(json).not.toMatch(re);
+      }
+      // Shape exacto recomendado
+      expect(keys.sort()).toEqual(expect.arrayContaining(['message']));
+      expect(keys.length).toBeLessThanOrEqual(3); // statusCode + message + (error?)
+    });
+  }
+
+  await attach('Error response shape (output)', {
+    requiredShape: '{ statusCode, message }',
+    forbiddenFields,
+    forbiddenSubstringCount: forbiddenSubstrings.length,
+  });
+  await allure.flush();
+});
+
+it('R8 config — HttpExceptionFilter MUST be registered globally and not leak req metadata', async () => {
+  const allure = new AllureCompat();
+  const attach = attachFor(allure);
+  await allure.epic('Configuracion');
+  await allure.feature('Generic Error Messages');
+  await allure.story('Filtro global registrado y su catch() NO incluye request.url ni timestamp');
+  await allure.severity('blocker');
+  await allure.tag('Config');
+  await allure.tag('GOES Checklist R8');
+  await allure.tag('Pentest Regression VULN-EXT-0013');
+
+  const fs = require('fs');
+  const path = require('path');
+  const stripComments = (src: string): string =>
+    src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  // Capa 1: main.ts registra useGlobalFilters
+  const mainSrc = stripComments(
+    fs.readFileSync(path.resolve(__dirname, '../../src/main.ts'), 'utf-8'),
+  );
+  expect(mainSrc).toMatch(/useGlobalFilters\s*\(/);
+
+  // Capa 2: el filter NO debe contener referencias a request.url ni new Date()
+  // dentro del response. Busqueda en cualquier *.filter.ts.
+  const glob = require('glob');
+  const filterFiles = glob.sync('src/**/*.filter.ts', {
+    cwd: path.resolve(__dirname, '../..'),
+    absolute: true,
+  });
+  expect(filterFiles.length).toBeGreaterThan(0);
+
+  for (const file of filterFiles) {
+    const src = stripComments(fs.readFileSync(file, 'utf-8'));
+
+    // El filter NO debe poner request.url ni similares en el body de respuesta
+    // (acepta que los registre en logs, no en response.json)
+    const responsesAssignedUrl = /response[^.]*\.\s*(json|send)\s*\([^)]*request\.url/;
+    const responsesAssignedTimestamp = /response[^.]*\.\s*(json|send)\s*\([^)]*timestamp/i;
+    const responsesAssignedPath = /response[^.]*\.\s*(json|send)\s*\([^)]*\bpath\b/;
+
+    await attach(`Filter ${file.split('/').pop()} (input)`, {
+      hasGetResponseCall: /\.getResponse\s*\(/.test(src),
+      assignsUrlToResponseBody: responsesAssignedUrl.test(src),
+      assignsTimestampToResponseBody: responsesAssignedTimestamp.test(src),
+      assignsPathToResponseBody: responsesAssignedPath.test(src),
+    });
+
+    expect(src).not.toMatch(responsesAssignedUrl);
+    expect(src).not.toMatch(responsesAssignedTimestamp);
+    expect(src).not.toMatch(responsesAssignedPath);
+  }
+
+  await attach('Filter static analysis (output)', {
+    globalFilterRegistered: true,
+    leaksRequestUrl: false,
+    leaksTimestamp: false,
+    leaksPath: false,
+  });
   await allure.flush();
 });
 ```

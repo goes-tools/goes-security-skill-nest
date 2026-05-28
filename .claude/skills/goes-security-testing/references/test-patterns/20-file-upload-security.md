@@ -12,6 +12,8 @@
 
 **Covers:** R57 (File Extension + Magic Byte Validation), R58 (File Extension Whitelist), R59 (File Size Limit), R60 (File UUID Rename)
 
+> Para **R61 (storage fuera del webroot), R62 (Content-Disposition: attachment) y R63 (escaneo de malware/contenido)** ver [`25-file-storage-and-serving.md`](./25-file-storage-and-serving.md). Los tres patrones son complementarios y comparten la misma logica de N/A vs hallazgo (3 estados).
+
 > **3 estados, no 2** (per SKILL.md "notApplicable vs hallazgo"):
 >
 > 1. Proyecto **NO** acepta uploads (sin `multer`, sin `FileInterceptor`, sin endpoints `multipart/form-data`) → marcar **R57-R60 como `t.notApplicable(...)`** con motivo verificable.

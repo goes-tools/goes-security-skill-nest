@@ -8,7 +8,7 @@ description: "Genera tests de seguridad con un Custom HTML Reporter (sin Java ni
 ## Resumen
 
 Este skill genera tests de seguridad profesionales para proyectos **NestJS + Jest** con un **Custom HTML Reporter** (sin Java, sin Allure).
-Cubre **60 items** del Checklist de Ciberseguridad GOES, **OWASP Top 10** y **OWASP API Security Top 10**.
+Cubre **57 items** del Checklist de Ciberseguridad GOES, **OWASP Top 10** y **OWASP API Security Top 10**.
 
 El reporte HTML es un archivo unico autocontenido con:
 - Sidebar con navegacion por Epic > Feature > Story
@@ -119,9 +119,12 @@ leerlos los tests no saben que verificar.
 ```
 - Buscar multer.diskStorage / memoryStorage en cualquier parte
 - Buscar @UseInterceptors(FileInterceptor(...))
-- Buscar uso de file-type, sharp, fluent-ffmpeg
-- Carpetas /uploads, /storage, /tmp (si existen)
-   * Si el proyecto NO maneja archivos, omitir patrones 20 (file upload).
+- Buscar uso de file-type, sharp, fluent-ffmpeg, clamav, virustotal, sandbox
+- Carpetas /uploads, /storage, /tmp (si existen) — verificar que NO esten dentro
+  del directorio servido por el frontend (cubre R61)
+- Buscar header `Content-Disposition` en send/sendFile/res.attachment (cubre R62)
+- Buscar antivirus / content scanning en pipeline de upload (cubre R63)
+   * Si el proyecto NO maneja archivos, omitir patrones 20 y 25 (file upload).
 ```
 
 ### 1.7 Tests existentes y configuracion de Jest
@@ -505,15 +508,42 @@ Items afectados por esta regla:
 - R9, R24, R34 (RBAC) — verificar `@Roles` y `RolesGuard`
 - R21, R33 (Forced browsing / token per request) — verificar `@UseGuards(JwtAuthGuard)`
 - R27 (Brute force) — verificar contador de intentos + bloqueo
-- R5, R11 (DTO validation) — verificar `ValidationPipe` global + decoradores en DTO
+- R5, R11 (DTO validation) — verificar `ValidationPipe` global con `whitelist: true` y `forbidNonWhitelisted: true` + decoradores en DTO; para contrasenas: `@MinLength(12)` y `@MaxLength(32)`, NO `@Matches` con reglas arbitrarias de mayusculas/digitos/simbolos
 - R19 (JWT claims) — verificar que `JwtStrategy.validate()` chequea `signature/exp/iat/iss/aud`
 - R37 (ORM) — verificar que NO hay queries raw (`grep` por `$queryRaw`, `query()`, `createQueryRunner().query()`)
 - R38-R41 (CORS) — verificar `app.enableCors()` con valores correctos
 - R44-R50 (Headers) — verificar `app.use(helmet(...))` Y E2E que los headers salen
 - R55 (Rate limiting) — verificar config + `@Throttle` decorator + E2E 429
+- R57-R60 (File extension, magic bytes, size, UUID) — config (multer limits, fileFilter) + aplicacion (FileInterceptor en endpoint) + comportamiento (rechazar payload malicioso)
+- R61 (Storage outside webroot) — config (storage path) + aplicacion (multer.diskStorage destination o S3 client) + comportamiento (path no resuelve dentro de /public, /static, /dist)
+- R62 (Content-Disposition) — config (helmet/header middleware) + aplicacion (res.setHeader o @Header decorator en endpoint download) + comportamiento (E2E: GET /files/:id devuelve header `Content-Disposition: attachment`)
+- R63 (Malware scanning) — config (ClamAV / sandbox / lib instalada) + aplicacion (scanner invocado en pipeline antes de persistir) + comportamiento (rechazar payload con EICAR test string)
+- **R3, R4, R11, R20 — Response DTO sanitization** (regresion VULN-INT-0002, VULN-EXT-0002, VULN-EXT-0006) — config (ClassSerializerInterceptor global o response DTOs por controller) + aplicacion (decoradores `@Expose` explicitos en cada DTO) + comportamiento (E2E con `supertest`: la response de `/api/auth/me` NO contiene DUI completo, CUIDs Prisma, ni listas de permisos con IDs internos). Ver pattern 28.
+- **R11, R55 — Export controls** (regresion VULN-INT-0004) — config (DTO con `@IsDefined` + `@IsDateString` en filtros) + aplicacion (controller con `@UseGuards(RolesGuard)` + DTO obligatorio) + comportamiento (E2E: `POST /api/reports/permits` con `{"format":"xlsx"}` solo → 400; con filtros validos → max 1000 registros + audit log escrito). Ver pattern 29.
+- **R14, R55 — Captcha en endpoints publicos sensibles** (regresion VULN-EXT-0003) — config (RecaptchaModule importado + env var del secret) + aplicacion (`@UseGuards(RecaptchaGuard)` en cada metodo publico sensible) + comportamiento (E2E: request sin token → 400/403; con token falso → 400/403 tras validacion server-side). Lista canonica de endpoints en pattern 30.
 
 NUNCA poner un test de control de defensa en un spec de "config-only".
 Cada test de control va en el spec del controller/service donde se aplica.
+
+### Regla critica: falsos negativos canonicos del pentest del 27/05/2026
+
+Estos 8 hallazgos del pentest **debieron ser atrapados por la skill y no lo fueron** porque los patterns existentes tenian assertions debiles o cobertura ausente. La skill ahora los cubre via patterns endurecidos (03, 11, 16) y patterns nuevos (28, 29, 30). Cada uno DEBE tener tag `Pentest Regression VULN-XXX-NNNN` y test obligatorio antes de marcar el item como verde:
+
+| VULN-ID | Hallazgo | Pattern que lo cubre | Tag de regresion |
+|---|---|---|---|
+| VULN-INT-0002 | `/api/auth/me` retorna roles + permisos con IDs internos | **28** (response DTO sanitization) | `Pentest Regression VULN-INT-0002` |
+| VULN-INT-0004 | Export reports sin filtros obligatorios | **29** (export controls) | `Pentest Regression VULN-INT-0004` |
+| VULN-INT-0009 | Cross-Origin-Resource-Policy: cross-origin en panel admin | **16** (security headers, test CORP/COOP) | `Pentest Regression VULN-INT-0009` |
+| VULN-EXT-0002 | DUI completo expuesto en `/api/auth/me` | **28** (response DTO sanitization) | `Pentest Regression VULN-EXT-0002` |
+| VULN-EXT-0003 | Sin reCAPTCHA en `verify-dui` | **30** (captcha public endpoints) | `Pentest Regression VULN-EXT-0003` |
+| VULN-EXT-0005 | Refresh token de 7 dias sin idle timeout | **11** (session — test idle timeout real con fake timers) | `Pentest Regression VULN-EXT-0005` |
+| VULN-EXT-0006 | CUID Prisma expuesto en responses | **28** (response DTO sanitization) | `Pentest Regression VULN-EXT-0006` |
+| VULN-EXT-0011 | CSP con `unsafe-inline` en estilos | **16** (security headers, asserts estrictos) | `Pentest Regression VULN-EXT-0011` |
+| VULN-EXT-0013 | `path` y `timestamp` en respuestas de error | **03** (error handling, asserts ampliados) | `Pentest Regression VULN-EXT-0013` |
+
+**Regla operativa**: cuando la skill genere tests para un proyecto NestJS GOES, los specs DEBEN incluir al menos un test con cada uno de estos tags. Si el proyecto bajo test no tiene la superficie correspondiente (ej. no expone `/api/auth/me` o no tiene endpoints de export), usar `t.notApplicable('motivo verificable con grep')` segun la regla de N/A vs hallazgo. **NO omitir el test** — el reporter HTML pierde la trazabilidad de regresion.
+
+**Por que esto importa**: cuando ciberseguridad audite el proyecto, debe ver los 9 tags `Pentest Regression VULN-*` en el reporte HTML, todos en verde o N/A justificado. Si encuentran un hallazgo que ya estaba en esta lista, es un fallo de la skill. Si encuentran un hallazgo NUEVO (no listado aqui), se documenta y se agrega un nuevo tag de regresion en la proxima version de la skill.
 
 ### Regla critica: notApplicable vs hallazgo (NO confundir)
 
@@ -566,7 +596,7 @@ implementado**, eso es un **HALLAZGO** (test rojo), NUNCA un N/A.
 **El reporte muestra el hallazgo (rojo). El auditor lo ve. El equipo lo
 arregla. El skill cumple su trabajo.** Ese es el flujo correcto.
 
-#### Esta regla es UNIVERSAL — aplica a los 54 items del checklist
+#### Esta regla es UNIVERSAL — aplica a los 57 items del checklist
 
 NO hay items "exentos" de esta regla. Por defecto, **ningun item del
 checklist se marca como N/A**. Para marcar N/A, hay que verificar
@@ -581,7 +611,7 @@ en el proyecto.
 | R29 — Remember Me | No hay feature "recordarme" en el login | `grep -r "rememberMe\|remember.me\|persistent.login" src/` → 0 resultados |
 | R32 — Token Rotation | El proyecto usa SOLO access tokens cortos, sin refresh | `grep -r "refreshToken\|refresh.token\|/refresh" src/` → 0 resultados |
 | R35 — Session Inactivity | El proyecto es 100% stateless (no usa sesiones server-side) | `grep -r "express-session\|@nestjs/passport.*session\|sessionTimeout" src/` → 0 resultados |
-| R57-R60 — File Upload | El proyecto NO acepta uploads de archivos | `grep -r "multer\|FileInterceptor\|UploadedFile\|multipart/form-data" src/` → 0 resultados |
+| R57-R63 — File Upload | El proyecto NO acepta uploads de archivos | `grep -r "multer\|FileInterceptor\|UploadedFile\|multipart/form-data" src/` → 0 resultados |
 | R6 — Robots/Sitemap | El backend no sirve contenido publico (solo APIs internas) | Verificar que no hay `@Public()` ni rutas servidas a no-autenticados |
 
 **Items que NUNCA pueden ser N/A** (universales — todo backend web los tiene):
@@ -661,7 +691,7 @@ Reglas:
 - **NO usar `it.skip(...)`** — el body no se ejecuta y se pierde toda la
   metadata (epic, feature, tags). El item queda invisible en el reporte.
 - **NO omitir el test** — el checklist GOES requiere trazabilidad explicita
-  de los 60 items, incluso los no aplicables.
+  de los 57 items, incluso los no aplicables.
 - **La razon debe ser verificable** — referenciar lo que SE BUSCO y NO se
   encontro (paquetes no instalados, decoradores no usados, endpoints no
   expuestos), no una afirmacion vaga ("no aplica al modulo").
@@ -695,17 +725,17 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 
 | ID | Tarea | Epic | Feature sugerida | Severity |
 |----|-------|------|------------------|----------|
-| R8 | Mensajes 2xx, 4xx, 5xx genericos (no exponer detalles internos) | Seguridad | Generic Error Messages | critical |
+| R8 | Mensajes 2xx, 4xx, 5xx genericos. **Body de error = `{statusCode, message}` exclusivamente** (sin `path`, `timestamp`, `stack`, `req.url` — regresion VULN-EXT-0013) | Seguridad | Generic Error Messages | critical |
 | R9 | Validacion por rol o permiso dentro del servidor | Autenticacion | RBAC Enforcement | blocker |
 | R10 | Eliminar todo log visible por el usuario | Seguridad | Log Exposure Prevention | critical |
-| R11 | Validacion de tipo de datos via DTO, longitud de campo, cantidad maxima de registros | Dominio | DTO Validation / Input Constraints | critical |
+| R11 | Validacion de tipo de datos via DTO, longitud de campo, max registros, **bloquear campos extras** (`forbidNonWhitelisted: true`); contrasenas: min 12 / max 32, sin reglas de complejidad arbitrarias | Dominio | DTO Validation / Input Constraints | critical |
 
 ### CATEGORIA 3: Autenticacion, registro y acciones de usuarios
 
 | ID | Tarea | Epic | Feature sugerida | Severity |
 |----|-------|------|------------------|----------|
 | R13 | Tiempo de vida bajo para access token (5 min) y refresh token | Seguridad | Token Lifetime Enforcement | critical |
-| R14 | Auth failures: MFA, rate limit, session management | Seguridad | Auth Failure Handling | blocker |
+| R14 | Auth failures: MFA, rate limit, session management, **+ captcha en endpoints publicos sensibles** (`verify-dui`, `register`, `forgot-password`, `recover-password`, `verify-email`, `contact`) — regresion VULN-EXT-0003 | Seguridad | Auth Failure Handling | blocker |
 | R15 | Encriptacion bcrypt, Argon2 o PBKDF2 en hashing | Seguridad | Password Hashing Strength | blocker |
 | R16 | Uso de algoritmo RS256 para firma de tokens | Seguridad | JWT Signing Algorithm | blocker |
 | R17 | Session ID minimo 128 bits de entropia | Seguridad | Session ID Entropy | critical |
@@ -726,7 +756,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | R32 | Renovar refresh token despues de cada uso (rotacion) | Seguridad | Token Rotation | blocker |
 | R33 | Validar token en cada peticion privada | Autenticacion | Token Validation Per Request | blocker |
 | R34 | Implementar RBAC | Autenticacion | Role-Based Access Control | blocker |
-| R35 | Sistema de inactividad (timeout de sesion) | Seguridad | Session Inactivity Timeout | critical |
+| R35 | Sistema de inactividad (timeout de sesion). **Idle timeout independiente del `exp` del JWT**: si no hay actividad en 30 min, sesion revocada server-side aunque el token siga vigente (regresion VULN-EXT-0005) | Seguridad | Session Inactivity Timeout | critical |
 
 ### CATEGORIA 4: Configuracion
 
@@ -739,7 +769,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | R41 | Access-Control-Max-Age: 3600 | Configuracion | CORS Preflight Cache | normal |
 | R42 | Cookies con HttpOnly, Secure, SameSite | Seguridad | Cookie Security Flags | blocker |
 | R43 | Debug mode deshabilitado | Configuracion | Debug Mode Disabled | critical |
-| R44 | Content-Security-Policy configurado | Configuracion | CSP Header | critical |
+| R44 | Content-Security-Policy configurado **SIN `unsafe-inline`, `unsafe-eval`, `unsafe-hashes` ni wildcard `*`** en ninguna directiva (regresion VULN-EXT-0011) | Configuracion | CSP Header | critical |
 | R45 | X-Content-Type-Options nosniff, X-Frame-Options DENY | Configuracion | Security Headers (XCT, XFO) | critical |
 | R46 | Strict-Transport-Security (HSTS) | Configuracion | HSTS Header | critical |
 | R47 | X-XSS-Protection 0 (deprecado, usar CSP) | Configuracion | XSS Protection Header | normal |
@@ -760,6 +790,9 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | R58 | Whitelist de extensiones permitidas | Archivos | File Extension Whitelist | blocker |
 | R59 | Limitar tamano de archivo | Archivos | File Size Limit | critical |
 | R60 | Renombrar archivos con UUID | Archivos | File UUID Rename | critical |
+| R61 | Almacenar archivos FUERA del root del proyecto (S3, storage externo, ruta absoluta fuera del arbol servido) | Archivos | File Storage Outside Webroot | critical |
+| R62 | Servir archivos con `Content-Disposition: attachment` (evita render inline / XSS drive-by via SVG/HTML) | Archivos | Content-Disposition Header | critical |
+| R63 | Escanear archivos de texto (PDF, Excel, Word) en busca de codigo malicioso antes de procesar | Archivos | Malware / Content Scanning | blocker |
 
 ---
 

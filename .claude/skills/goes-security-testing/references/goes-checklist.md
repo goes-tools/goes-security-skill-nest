@@ -18,7 +18,7 @@ Each item MUST have at least 1 test. Traceability tag: `GOES Checklist Rxx`.
 | R8 | Generic error messages for 2xx, 4xx, 5xx (never expose stack traces, queries, internals) | Security | Generic Error Messages | critical |
 | R9 | Role or permission-based validation on the server side | Authentication | RBAC Enforcement | blocker |
 | R10 | Remove all user-visible logs (no console.log in production) | Security | Log Exposure Prevention | critical |
-| R11 | Input validation via DTO: data type, field length, max records | Domain | DTO Validation / Input Constraints | critical |
+| R11 | Input validation via DTO: data type, field length, max records, reject extra fields (`forbidNonWhitelisted: true`); for passwords: min 12 / max 32 chars, no arbitrary complexity rules | Domain | DTO Validation / Input Constraints | critical |
 
 ## Category 3: Authentication, Registration and User Actions
 
@@ -80,6 +80,9 @@ Each item MUST have at least 1 test. Traceability tag: `GOES Checklist Rxx`.
 | R58 | Whitelist of allowed extensions (.pdf, .jpg, .png) | Files | File Extension Whitelist | blocker |
 | R59 | Limit file size (e.g., 10MB max) | Files | File Size Limit | critical |
 | R60 | Rename files with UUID (never use original name) | Files | File UUID Rename | critical |
+| R61 | Store uploaded files OUTSIDE the project root / webroot (use S3, external storage or absolute path off the served tree) | Files | File Storage Outside Webroot | critical |
+| R62 | Serve uploaded files with `Content-Disposition: attachment` (prevent inline rendering / drive-by XSS via SVG/HTML uploads) | Files | Content-Disposition Header | critical |
+| R63 | Scan uploaded text-based files (PDF, Excel, Word) for malicious code / payloads before processing | Files | Malware / Content Scanning | blocker |
 
 ---
 
@@ -162,11 +165,11 @@ Each item MUST have at least 1 test. Traceability tag: `GOES Checklist Rxx`.
 - 9.3 What NOT to Log: passwords (plain text or hashed), session tokens/JWTs/API keys, full card numbers, sensitive personal data (SSN, medical records), configuration secrets
 
 ### Section 10: File Upload
-- Validate extension AND magic bytes (content-type can be spoofed)
-- Whitelist of extensions (.pdf, .jpg, .png)
-- Limit max file size (e.g., 10MB)
-- Rename with UUID (never use original name)
-- Store outside webroot or in external storage (S3)
-- Scan with antivirus before processing
-- Serve with Content-Disposition: attachment
+- Validate extension AND magic bytes (content-type can be spoofed) — **R57**
+- Whitelist of extensions (.pdf, .jpg, .png) — **R58**
+- Limit max file size (e.g., 10MB) — **R59**
+- Rename with UUID (never use original name) — **R60**
+- Store outside webroot or in external storage (S3) — **R61**
+- Serve with `Content-Disposition: attachment` — **R62**
+- Scan with antivirus / content inspection before processing — **R63**
 - DO NOT execute uploaded files (disable execution in uploads directory)
