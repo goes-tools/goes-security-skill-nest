@@ -5,7 +5,7 @@ const path = require('path');
 const os = require('os');
 
 // ─── Reporter version (bump on breaking metadata format changes) ────────────
-const REPORTER_VERSION = '1.1.0';
+const REPORTER_VERSION = '2.0.0';
 
 // ─── Per-process run id ─────────────────────────────────────────────────────
 // metadata.ts and html-reporter.js share this convention so multiple Jest
@@ -606,6 +606,300 @@ class SecurityHtmlReporter {
       outline: none;
       border-color: #3b82f6;
     }
+
+    /* ============================================================
+       v2.0 — Executive Banner, Metadata, Pentest Regression, Checklist Matrix
+       ============================================================ */
+
+    .metadata-bar {
+      background: linear-gradient(90deg, #0f1923, #131e2a);
+      border-bottom: 1px solid #1f2c3a;
+      padding: 8px 24px;
+      font-size: 12px;
+      color: #7a8595;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .metadata-bar strong {
+      color: #c8d0d8;
+      font-weight: 600;
+    }
+
+    .metadata-bar .meta-divider {
+      width: 1px;
+      height: 14px;
+      background: #2a3a4a;
+    }
+
+    .executive-banner {
+      margin: 20px 24px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 2px solid #2a3a4a;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: fadeIn 0.5s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .executive-banner.ready  { border-color: #22c55e; background: linear-gradient(135deg, #0f1f17, #0d1f15); }
+    .executive-banner.warn   { border-color: #f59e0b; background: linear-gradient(135deg, #1f1a0f, #1f180c); }
+    .executive-banner.block  { border-color: #ef4444; background: linear-gradient(135deg, #1f0f0f, #1f0c0c); }
+
+    .executive-top {
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+
+    .traffic-light {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #fff;
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.05);
+    }
+    .traffic-light.ready  { background: radial-gradient(circle at 35% 30%, #4ade80, #22c55e); }
+    .traffic-light.warn   { background: radial-gradient(circle at 35% 30%, #fbbf24, #f59e0b); }
+    .traffic-light.block  { background: radial-gradient(circle at 35% 30%, #f87171, #ef4444); }
+
+    .executive-headline {
+      flex: 1;
+      min-width: 260px;
+    }
+
+    .executive-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #f3f4f6;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.2px;
+    }
+
+    .executive-subtitle {
+      font-size: 13px;
+      color: #94a3b8;
+      margin: 0;
+    }
+
+    .executive-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(120px, 1fr));
+      gap: 0;
+      background: rgba(0,0,0,0.2);
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .executive-stat {
+      padding: 14px 18px;
+      border-right: 1px solid rgba(255,255,255,0.05);
+      text-align: center;
+    }
+    .executive-stat:last-child { border-right: none; }
+
+    .executive-stat-label {
+      font-size: 10px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .executive-stat-value {
+      font-size: 22px;
+      font-weight: 700;
+      color: #f3f4f6;
+    }
+    .executive-stat-value.green  { color: #22c55e; }
+    .executive-stat-value.red    { color: #ef4444; }
+    .executive-stat-value.amber  { color: #f59e0b; }
+    .executive-stat-value.cyan   { color: #06b6d4; }
+
+    .executive-stat-sub {
+      font-size: 11px;
+      color: #7a8595;
+      margin-top: 3px;
+    }
+
+    /* ============================================================
+       Pentest Regression Panel
+       ============================================================ */
+
+    .panel-section {
+      margin: 0 24px 20px 24px;
+      background: #131e2a;
+      border: 1px solid #2a3a4a;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 14px 18px;
+      background: #0f1923;
+      border-bottom: 1px solid #2a3a4a;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e8e8e8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin: 0;
+    }
+
+    .panel-badge {
+      background: #1e3a5f;
+      color: #93c5fd;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .pentest-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .pentest-table th,
+    .pentest-table td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid #1f2c3a;
+    }
+
+    .pentest-table th {
+      background: #0f1923;
+      color: #94a3b8;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+
+    .pentest-table tr:hover { background: rgba(59, 130, 246, 0.06); cursor: pointer; }
+    .pentest-table tr:last-child td { border-bottom: none; }
+
+    .pentest-id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #c8d0d8; }
+    .pentest-status-pass { color: #22c55e; font-weight: 700; }
+    .pentest-status-fail { color: #ef4444; font-weight: 700; }
+    .pentest-status-na   { color: #f59e0b; font-weight: 700; }
+    .pentest-status-missing { color: #7a8595; font-style: italic; }
+
+    .sev-pill {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .sev-blocker  { background: #4c1d95; color: #ddd6fe; }
+    .sev-critical { background: #7f1d1d; color: #fecaca; }
+    .sev-high     { background: #9a3412; color: #fed7aa; }
+    .sev-medium   { background: #78350f; color: #fde68a; }
+    .sev-normal   { background: #1e3a5f; color: #93c5fd; }
+    .sev-low      { background: #1f2937; color: #9ca3af; }
+    .sev-minor    { background: #1f2937; color: #9ca3af; }
+    .sev-trivial  { background: #111827; color: #6b7280; }
+
+    /* ============================================================
+       Checklist Coverage Matrix
+       ============================================================ */
+
+    .checklist-matrix {
+      padding: 14px 18px 18px 18px;
+    }
+
+    .checklist-category {
+      margin-bottom: 18px;
+    }
+    .checklist-category:last-child { margin-bottom: 0; }
+
+    .checklist-category-title {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .checklist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(54px, 1fr));
+      gap: 6px;
+    }
+
+    .checklist-cell {
+      padding: 8px 6px;
+      border-radius: 4px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      border: 1px solid transparent;
+      color: #e8e8e8;
+    }
+    .checklist-cell:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    .checklist-cell.pass    { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); color: #4ade80; }
+    .checklist-cell.fail    { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
+    .checklist-cell.na      { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+    .checklist-cell.missing { background: #1f2937; border-color: #2a3a4a; color: #6b7280; }
+
+    /* ============================================================
+       Footer
+       ============================================================ */
+
+    .reporter-footer {
+      padding: 18px 24px;
+      border-top: 1px solid #2a3a4a;
+      margin-top: 24px;
+      font-size: 11px;
+      color: #7a8595;
+      text-align: center;
+    }
+    .reporter-footer code {
+      background: #0f1923;
+      padding: 1px 6px;
+      border-radius: 3px;
+      color: #c8d0d8;
+    }
+
+    /* ============================================================
+       Print adjustments
+       ============================================================ */
+    @media print {
+      .executive-banner, .panel-section { break-inside: avoid; }
+      .metadata-bar { display: none; }
+    }
+
 
     .tests-table {
       border: 1px solid #2a3a4a;
@@ -1451,6 +1745,11 @@ class SecurityHtmlReporter {
         </div>
       </div>
 
+      <div class="metadata-bar" id="metadataBar"></div>
+      <div id="executiveBanner"></div>
+      <div id="pentestRegressionPanel"></div>
+      <div id="checklistMatrixPanel"></div>
+
       <div class="charts-row" id="chartsRow"></div>
       <div class="stats-row" id="statsRow"></div>
 
@@ -1476,6 +1775,12 @@ class SecurityHtmlReporter {
   <div class="modal-overlay" id="modalOverlay">
     <div class="modal" id="modal"></div>
   </div>
+
+  <footer class="reporter-footer">
+    Generado por <strong>goes-security-testing</strong> reporter v${escapedReporterVersion} &middot;
+    Proyecto: <code>${escapedProject}</code> &middot;
+    <span id="footerCommit"></span>
+  </footer>
 
   <script>
     const DATA = ${dataJson};
@@ -1503,12 +1808,315 @@ class SecurityHtmlReporter {
     function statusLabel(st) { return STATUS_ES[st] || st.toUpperCase(); }
 
     function init() {
+      renderMetadataBar();
+      renderExecutiveBanner();
+      renderPentestRegressionPanel();
+      renderChecklistMatrixPanel();
       buildSidebar();
       renderCharts();
       renderStats();
       renderTests();
       setupSidebarSearch();
       setupTestsSearch();
+      renderFooter();
+    }
+
+    // ============================================================
+    // v2.0 — Helpers para metricas extendidas
+    // ============================================================
+
+    function computeChecklistCoverage() {
+      // 57 items oficiales: R3-R6, R8-R11, R13-R35, R37-R55, R57-R63
+      const items = [];
+      for (let n = 3; n <= 63; n++) {
+        if ([7, 12, 36, 56].includes(n)) continue;
+        items.push('R' + n);
+      }
+      const result = {};
+      for (const r of items) {
+        const tag = 'GOES Checklist ' + r;
+        const tests = DATA.tests.filter(t => (t.tags || []).includes(tag));
+        if (tests.length === 0) {
+          result[r] = { status: 'missing', tests: 0 };
+          continue;
+        }
+        const failed = tests.some(t => t.status === 'failed');
+        const allSkipped = tests.every(t => t.status === 'skipped');
+        if (failed) result[r] = { status: 'fail', tests: tests.length };
+        else if (allSkipped) result[r] = { status: 'na', tests: tests.length };
+        else result[r] = { status: 'pass', tests: tests.length };
+      }
+      return { items, result };
+    }
+
+    function computePentestRegression() {
+      const regression = [];
+      const seenIds = new Set();
+      for (const t of DATA.tests) {
+        for (const tag of (t.tags || [])) {
+          const m = tag.match(/^Pentest Regression\s+(VULN-[A-Z]+-\d+)$/);
+          if (m && !seenIds.has(m[1])) {
+            seenIds.add(m[1]);
+            regression.push({
+              id: m[1],
+              test: t,
+              severity: t.severity || 'normal',
+              status: t.status,
+              story: t.story || '',
+              feature: t.feature || '',
+            });
+          }
+        }
+      }
+      regression.sort((a, b) => a.id.localeCompare(b.id));
+      return regression;
+    }
+
+    function computeDeployReadiness() {
+      const total = DATA.tests.length;
+      const passed = DATA.tests.filter(t => t.status === 'passed').length;
+      const failed = DATA.tests.filter(t => t.status === 'failed').length;
+      const skipped = DATA.tests.filter(t => t.status === 'skipped').length;
+      const blockerFails = DATA.tests.filter(t => t.status === 'failed' &&
+        ['blocker', 'critical'].includes(t.severity)).length;
+
+      const { items, result } = computeChecklistCoverage();
+      const cov = items.filter(r => result[r].status === 'pass' || result[r].status === 'na').length;
+      const covPct = Math.round((cov / items.length) * 100);
+
+      const regression = computePentestRegression();
+      const regGreen = regression.filter(r => r.status === 'passed' || r.status === 'skipped').length;
+
+      let state = 'ready';
+      let title = 'LISTO PARA DEPLOY';
+      let subtitle = 'Todos los controles de seguridad estan verdes.';
+      let icon = '✓';
+
+      if (blockerFails > 0 || (regression.length > 0 && regGreen < regression.length)) {
+        state = 'block';
+        title = 'NO LISTO PARA DEPLOY';
+        icon = '✕';
+        const reasons = [];
+        if (blockerFails > 0) reasons.push(blockerFails + ' fallo(s) blocker/critical');
+        if (regression.length > regGreen) reasons.push((regression.length - regGreen) + ' regresion(es) de pentest rojas');
+        subtitle = 'Bloqueado: ' + reasons.join(', ') + '.';
+      } else if (failed > 0 || covPct < 95) {
+        state = 'warn';
+        title = 'ATENCION REQUERIDA';
+        icon = '!';
+        const reasons = [];
+        if (failed > 0) reasons.push(failed + ' test(s) fallidos');
+        if (covPct < 95) reasons.push('cobertura ' + covPct + '%');
+        subtitle = 'Revisar antes de deploy: ' + reasons.join(', ') + '.';
+      }
+
+      return {
+        state, title, subtitle, icon,
+        total, passed, failed, skipped, blockerFails,
+        cov, covTotal: items.length, covPct,
+        regGreen, regTotal: regression.length,
+      };
+    }
+
+    // ============================================================
+    // v2.0 — Render: Metadata bar
+    // ============================================================
+
+    function renderMetadataBar() {
+      const el = document.getElementById('metadataBar');
+      if (!el) return;
+      const parts = [];
+      parts.push('<span><strong>Proyecto:</strong> ' + escapeHtml(DATA.meta?.project || 'N/A') + '</span>');
+      parts.push('<span class="meta-divider"></span>');
+      parts.push('<span><strong>Run:</strong> ' + escapeHtml(DATA.meta?.generatedAt || '') + '</span>');
+      if (DATA.meta?.env) {
+        parts.push('<span class="meta-divider"></span>');
+        parts.push('<span><strong>Env:</strong> ' + escapeHtml(DATA.meta?.env || '') + '</span>');
+      }
+      if (DATA.meta?.branch || DATA.meta?.commit) {
+        parts.push('<span class="meta-divider"></span>');
+        const branch = DATA.meta?.branch ? '<strong>Branch:</strong> ' + escapeHtml(DATA.meta.branch) : '';
+        const commit = DATA.meta?.commit ? '<strong>Commit:</strong> <code>' + escapeHtml(DATA.meta.commit.substring(0,8)) + '</code>' : '';
+        parts.push('<span>' + [branch, commit].filter(Boolean).join(' &middot; ') + '</span>');
+      }
+      parts.push('<span class="meta-divider"></span>');
+      parts.push('<span><strong>Reporter:</strong> v' + escapeHtml(DATA.meta?.reporterVersion || '2.0.0') + '</span>');
+      el.innerHTML = parts.join('');
+    }
+
+    // ============================================================
+    // v2.0 — Render: Executive banner
+    // ============================================================
+
+    function renderExecutiveBanner() {
+      const el = document.getElementById('executiveBanner');
+      if (!el) return;
+      const r = computeDeployReadiness();
+
+      el.innerHTML = '<div class="executive-banner ' + r.state + '">' +
+        '<div class="executive-top">' +
+          '<div class="traffic-light ' + r.state + '">' + r.icon + '</div>' +
+          '<div class="executive-headline">' +
+            '<h2 class="executive-title">' + escapeHtml(r.title) + '</h2>' +
+            '<p class="executive-subtitle">' + escapeHtml(r.subtitle) + '</p>' +
+          '</div>' +
+        '</div>' +
+        '<div class="executive-stats">' +
+          '<div class="executive-stat">' +
+            '<div class="executive-stat-label">Tests Totales</div>' +
+            '<div class="executive-stat-value cyan">' + r.total + '</div>' +
+            '<div class="executive-stat-sub">' + r.passed + ' aprobados</div>' +
+          '</div>' +
+          '<div class="executive-stat">' +
+            '<div class="executive-stat-label">Fallos</div>' +
+            '<div class="executive-stat-value ' + (r.failed > 0 ? 'red' : 'green') + '">' + r.failed + '</div>' +
+            '<div class="executive-stat-sub">' + r.blockerFails + ' blocker/critical</div>' +
+          '</div>' +
+          '<div class="executive-stat">' +
+            '<div class="executive-stat-label">Checklist GOES</div>' +
+            '<div class="executive-stat-value ' + (r.covPct >= 95 ? 'green' : r.covPct >= 80 ? 'amber' : 'red') + '">' + r.cov + '/' + r.covTotal + '</div>' +
+            '<div class="executive-stat-sub">' + r.covPct + '% cobertura</div>' +
+          '</div>' +
+          '<div class="executive-stat">' +
+            '<div class="executive-stat-label">Pentest Regression</div>' +
+            '<div class="executive-stat-value ' + (r.regTotal === 0 ? 'cyan' : (r.regGreen === r.regTotal ? 'green' : 'red')) + '">' +
+              (r.regTotal === 0 ? '—' : r.regGreen + '/' + r.regTotal) +
+            '</div>' +
+            '<div class="executive-stat-sub">' + (r.regTotal === 0 ? 'sin historial' : 'mitigados') + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // ============================================================
+    // v2.0 — Render: Pentest Regression Panel
+    // ============================================================
+
+    function renderPentestRegressionPanel() {
+      const el = document.getElementById('pentestRegressionPanel');
+      if (!el) return;
+      const regression = computePentestRegression();
+      if (regression.length === 0) {
+        el.innerHTML = '';
+        return;
+      }
+
+      const rows = regression.map(r => {
+        const statusClass = r.status === 'passed' ? 'pentest-status-pass' :
+                            r.status === 'failed' ? 'pentest-status-fail' :
+                            'pentest-status-na';
+        const statusLabel = r.status === 'passed' ? '✓ MITIGADO' :
+                            r.status === 'failed' ? '✗ REGRESION' :
+                            '⊘ N/A';
+        return '<tr onclick="openTestByName(\\\'' + escapeHtml(r.test.fullName || r.test.title) + '\\\')">' +
+          '<td class="pentest-id">' + escapeHtml(r.id) + '</td>' +
+          '<td><span class="sev-pill sev-' + r.severity + '">' + escapeHtml(r.severity) + '</span></td>' +
+          '<td class="' + statusClass + '">' + statusLabel + '</td>' +
+          '<td>' + escapeHtml(r.feature) + '</td>' +
+          '<td>' + escapeHtml(r.story.substring(0, 80)) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      el.innerHTML = '<div class="panel-section">' +
+        '<div class="panel-header">' +
+          '<h3 class="panel-title">🛡️ Pentest Regression — Hallazgos historicos</h3>' +
+          '<span class="panel-badge">' + regression.length + '</span>' +
+        '</div>' +
+        '<table class="pentest-table">' +
+          '<thead><tr>' +
+            '<th>VULN-ID</th>' +
+            '<th>Severidad</th>' +
+            '<th>Status</th>' +
+            '<th>Feature</th>' +
+            '<th>Hallazgo</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>';
+    }
+
+    function openTestByName(name) {
+      const test = DATA.tests.find(t => (t.fullName || t.title) === name);
+      if (test && typeof openModal === 'function') openModal(test);
+    }
+
+    // ============================================================
+    // v2.0 — Render: Checklist Coverage Matrix
+    // ============================================================
+
+    function renderChecklistMatrixPanel() {
+      const el = document.getElementById('checklistMatrixPanel');
+      if (!el) return;
+      const { items, result } = computeChecklistCoverage();
+
+      // Agrupar por categoria GOES
+      const categories = [
+        { name: 'Categoria 1 — Contenido Web', items: ['R3','R4','R5','R6'] },
+        { name: 'Categoria 2 — Entrada/Salida del Servidor', items: ['R8','R9','R10','R11'] },
+        { name: 'Categoria 3 — Autenticacion, Registro y Acciones', items: ['R13','R14','R15','R16','R17','R18','R19','R20','R21','R22','R23','R24','R25','R26','R27','R28','R29','R30','R31','R32','R33','R34','R35'] },
+        { name: 'Categoria 4 — Configuracion', items: ['R37','R38','R39','R40','R41','R42','R43','R44','R45','R46','R47','R48','R49','R50','R51','R52','R53','R54','R55'] },
+        { name: 'Categoria 5 — Manejo de Archivos', items: ['R57','R58','R59','R60','R61','R62','R63'] },
+      ];
+
+      const totalCov = items.filter(r => result[r].status === 'pass' || result[r].status === 'na').length;
+
+      let html = '<div class="panel-section">' +
+        '<div class="panel-header">' +
+          '<h3 class="panel-title">📋 Cobertura del Checklist GOES</h3>' +
+          '<span class="panel-badge">' + totalCov + ' / ' + items.length + ' items</span>' +
+        '</div>' +
+        '<div class="checklist-matrix">';
+
+      for (const cat of categories) {
+        const catPass = cat.items.filter(r => result[r] && (result[r].status === 'pass' || result[r].status === 'na')).length;
+        html += '<div class="checklist-category">' +
+          '<div class="checklist-category-title">' +
+            '<span>' + escapeHtml(cat.name) + '</span>' +
+            '<span class="panel-badge">' + catPass + '/' + cat.items.length + '</span>' +
+          '</div>' +
+          '<div class="checklist-grid">';
+        for (const r of cat.items) {
+          const cell = result[r] || { status: 'missing', tests: 0 };
+          const icon = cell.status === 'pass' ? '✓' :
+                       cell.status === 'fail' ? '✗' :
+                       cell.status === 'na' ? '⊘' : '?';
+          const title = r + ': ' + cell.status + ' (' + cell.tests + ' test' + (cell.tests === 1 ? '' : 's') + ')';
+          html += '<div class="checklist-cell ' + cell.status + '" title="' + escapeHtml(title) + '" onclick="filterByChecklistItem(\\\'' + r + '\\\')">' +
+            '<div style="font-size:10px; opacity:0.75;">' + r + '</div>' +
+            '<div>' + icon + '</div>' +
+          '</div>';
+        }
+        html += '</div></div>';
+      }
+
+      html += '</div></div>';
+      el.innerHTML = html;
+    }
+
+    function filterByChecklistItem(rid) {
+      const tag = 'GOES Checklist ' + rid;
+      filteredTests = DATA.tests.filter(t => (t.tags || []).includes(tag));
+      currentFilter = 'checklist-' + rid;
+      renderTests();
+      const pill = document.getElementById('filterPillLabel');
+      if (pill) {
+        pill.textContent = 'Filtro: ' + tag;
+        document.getElementById('filterPill').style.display = 'inline-flex';
+      }
+      window.scrollTo({ top: document.querySelector('.tests-section').offsetTop - 20, behavior: 'smooth' });
+    }
+
+    // ============================================================
+    // v2.0 — Render: Footer
+    // ============================================================
+
+    function renderFooter() {
+      const el = document.getElementById('footerCommit');
+      if (!el) return;
+      const parts = [];
+      if (DATA.meta?.commit) parts.push('Commit <code>' + escapeHtml(DATA.meta.commit.substring(0, 8)) + '</code>');
+      if (DATA.meta?.branch) parts.push('Branch <code>' + escapeHtml(DATA.meta.branch) + '</code>');
+      el.innerHTML = parts.join(' &middot; ');
     }
 
     function buildSidebar() {

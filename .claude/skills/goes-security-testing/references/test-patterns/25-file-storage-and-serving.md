@@ -1,6 +1,6 @@
 # Pattern 25: File Storage Location, Serving and Malware Scanning
 
-> **Migration note (skill v1.1):** these patterns run against the bundled
+> **Migration note (skill v2.0):** these patterns run against the bundled
 > custom HTML reporter via `AllureCompat`. Each `it(...)` block MUST end with
 > `await allure.flush();` so the metadata reaches the reporter.
 

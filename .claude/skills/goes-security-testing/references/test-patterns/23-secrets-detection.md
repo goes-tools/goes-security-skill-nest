@@ -1,6 +1,6 @@
 # Pattern 23: Secrets & API Keys Detection — Static Source Scan
 
-> **Migration note (skill v1.1):** uses the lightweight `report()` API from the
+> **Migration note (skill v2.0):** uses the lightweight `report()` API from the
 > bundled custom HTML reporter. Each `it(...)` block must end with
 > `await t.flush();` so the metadata reaches the reporter.
 

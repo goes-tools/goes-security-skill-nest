@@ -1,6 +1,6 @@
 # Pattern 01: CRUD + DTO Validation
 
-> **Migration note (skill v1.1):** these patterns were originally written for
+> **Migration note (skill v2.0):** these patterns were originally written for
 > `allure-js-commons`. They now run against the bundled custom HTML reporter
 > via `AllureCompat`, which mirrors the same API. The `_setup.md` snippet
 > shows the new top-level imports. Existing `await allure.epic(...)`,

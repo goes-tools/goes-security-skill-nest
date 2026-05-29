@@ -5,9 +5,9 @@ self-contained Jest reporter: it requires no Allure CLI, no Java, no external
 service. This guide covers the customizations that turn the report into
 something you can hand to an auditor.
 
-> **Skill v1.1 note:** the reporter previously hard-coded the project name
+> **Skill v2.0 note:** the reporter previously hard-coded the project name
 > to `'Portafolio IT Backend'` and assumed a single tempdir on disk. Both
-> issues are fixed in v1.1: the project name is parametrizable and a
+> issues are fixed in v2.0: the project name is parametrizable and a
 > per-process subdirectory keeps parallel runs from mixing their metadata.
 
 ---
@@ -190,5 +190,5 @@ security_tests:
 | Report shows `0 tests` | `await allure.flush()` (or `await t.flush()`) missing in the test body. Without flush the metadata is never written. |
 | Severity / OWASP charts empty | Tags missing the `OWASP Axx` or `GOES Checklist Rxx` prefix. The chart classifies by prefix, so wording matters. |
 | Two parallel CI jobs see each other's tests | Set `SECURITY_REPORTER_RUN_ID` per job. |
-| `NaN` paths in the SVG | Means zero tests ran. v1.1 renders an explicit "No tests" placeholder instead — upgrade the reporter file. |
+| `NaN` paths in the SVG | Means zero tests ran. v2.0 renders an explicit "No tests" placeholder instead — upgrade the reporter file. |
 | Project name shows `Security Report` instead of yours | `projectName` not passed in Jest config and `package.json` not found. Pass `projectName` explicitly. |

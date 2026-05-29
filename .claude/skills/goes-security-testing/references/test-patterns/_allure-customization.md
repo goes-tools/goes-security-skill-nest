@@ -1,8 +1,8 @@
 # Allure Report Customization — DEPRECATED
 
-> **Skill v1.1 note:** this file used to describe Allure-specific tweaks
+> **Skill v2.0 note:** this file used to describe Allure-specific tweaks
 > (`categories.json`, `environment.properties`, `executor.json`). Skill v1.0
-> shipped Allure as the default reporter; v1.1 replaced it with a
+> shipped Allure as the default reporter; v2.0 replaced it with a
 > self-contained custom HTML reporter that needs none of those artifacts.
 >
 > The Allure customization tips no longer apply. **See
