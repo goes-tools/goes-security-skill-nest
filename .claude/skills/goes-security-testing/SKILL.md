@@ -1049,17 +1049,94 @@ proyecto especifico.
 
 ---
 
-## PASO 8: Verificacion
+## PASO 8: Verificacion estricta — `security:doctor` OBLIGATORIO
 
-Despues de generar todos los archivos:
+> **Esta es la garantia final de que la skill se aplico correctamente.**
+> Si el doctor no pasa con 0 errores, la skill NO se considera aplicada
+> exitosamente. Reportar FAILURE explicito al usuario y NO emitir el
+> mensaje de "skill aplicada con exito".
 
-1. Ejecutar `npm run test:security:html` para verificar que todos los tests pasan y el reporte se genera
-2. Si hay errores de ESLint, corregirlos (especialmente require-await en archivos de test)
-3. Verificar que `reports/security/security-report.html` se genero correctamente
-4. Verificar que **todos los VULN-IDs activos del `pentest-history.yaml` tienen un spec en `test/security/regression/`**
-5. Verificar que **`test/security/security.snapshot.json` existe y fue aprobado por ciberseguridad**
-6. Verificar que **`.github/workflows/security-gate.yml` esta committeado y el branch protection esta activo**
-7. Mostrar resumen: cuantos tests generados, cuantos items del checklist cubiertos, cuantos OWASP cubiertos, cuantos VULN-IDs en regresion
+### 8.1 Copiar e instalar el doctor
+
+1. Copiar `.claude/skills/goes-security-testing/references/templates/security-doctor.ts`
+   a `scripts/security-doctor.ts` en el proyecto bajo test.
+2. Agregar al `package.json`:
+   ```json
+   {
+     "scripts": {
+       "security:doctor": "ts-node scripts/security-doctor.ts"
+     },
+     "devDependencies": {
+       "js-yaml": "^4.1.0",
+       "@types/js-yaml": "^4.0.9",
+       "glob": "^10.3.10"
+     }
+   }
+   ```
+3. `npm install`.
+
+### 8.2 Configurar el pre-commit hook
+
+1. Copiar `references/templates/pre-commit-pentest-history.sh` a
+   `.husky/pre-commit` (o equivalente: `lefthook.yml`, `.git/hooks/pre-commit`).
+2. Hacer `chmod +x` al hook.
+
+### 8.3 Ejecutar la verificacion final
+
+```bash
+npm run test:security:html       # Suite completa
+npm run security:doctor          # Auditoria estructural
+```
+
+Ambos comandos DEBEN salir con codigo 0. Si cualquiera falla:
+
+- **`test:security:html` falla**: hay tests rojos. Revisar cuales y arreglar el codigo del proyecto (o, si es un hallazgo no aplicable, justificar con `t.notApplicable(motivo)`).
+- **`security:doctor` falla**: hay piezas estructurales faltantes. El doctor imprime exactamente cuales. Resolverlas siguiendo las instrucciones que el doctor emite.
+
+### 8.4 Output esperado del doctor (estado verde)
+
+```
+===========================================
+  GOES Security Doctor — Audit Report
+===========================================
+Proyecto: <nombre>
+Resultado: PASS (7/7)
+
+[OK  ] CANONICAL_FILES — Archivos canonicos de la skill presentes
+[OK  ] CHECKLIST_COVERAGE — 57 items del checklist GOES cubiertos
+        57/57 cubiertos
+[OK  ] PENTEST_REGRESSION — Cada VULN-ID del pentest-history tiene su regression spec
+[OK  ] SNAPSHOT_VALID — security.snapshot.json existe, es valido y esta aprobado
+[OK  ] CI_GATE_INTEGRITY — security-gate.yml integro, sin bypasses
+[OK  ] CODEOWNERS — CODEOWNERS protege snapshot + workflow
+[OK  ] NPM_SCRIPTS — Scripts npm test:security:* declarados
+
+Reporte JSON: reports/security/doctor-report.json
+```
+
+### 8.5 Reglas para la IA al aplicar la skill
+
+1. **NO emitir "skill aplicada con exito" si el doctor falla.** Reportar
+   FAILURE al usuario y listar las correcciones necesarias.
+2. **NO marcar items como N/A para hacer pasar el doctor.** Si un item
+   requiere `t.notApplicable()`, debe tener motivo verificable con grep.
+3. **NO modificar `security-doctor.ts` para que pase.** Si una verificacion
+   falla, el codigo del proyecto debe ajustarse, no el doctor.
+4. **El doctor se integra al CI gate** (`security-gate.yml` job `security-doctor`),
+   por lo que aunque la IA lo "pase" localmente, en CI se vuelve a correr.
+
+### 8.6 Flujo de hallazgo nuevo
+
+Ver `references/templates/pentest-ingest.md`. Resumen:
+
+1. Ciberseguridad entrega PDF.
+2. Equipo agrega entries al `pentest-history.yaml`.
+3. Equipo crea `test/security/regression/<VULN-ID>.regression.spec.ts`.
+4. Si requiere snapshot, actualizar `security.snapshot.json` (review de CODEOWNERS).
+5. `npm run security:doctor` debe pasar.
+6. PR + merge + push.
+7. A partir de ese momento, ese VULN-ID queda cubierto en CUALQUIER proyecto
+   futuro que aplique la skill — porque el YAML vive en `.claude/skills/`.
 
 ---
 

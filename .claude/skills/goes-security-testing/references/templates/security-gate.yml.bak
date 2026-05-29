@@ -253,6 +253,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: security-doctor-report
-          path: reports/security/doctor-report.json
+          path: reports/security/doctor.json
           retention-days: 30
           if-no-files-found: ignore
