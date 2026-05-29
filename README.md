@@ -66,7 +66,7 @@ Reporter:
 - reportTitle: "Security Test Report — GOES [Sistema]"
 
 Al final, npm run test:security:html y resumen con cobertura,
-hallazgos rojos e ítems N/A con su grep.
+hallazgos rojos e ítems N/A con su grep, todas las carpetas que hagas agregalas al gitignore
 ```
 
 **Use when**: you want a clean compliance report, a third-party audit, or a baseline before the team starts remediation. Findings stay visible in the HTML.
