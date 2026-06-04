@@ -14,8 +14,9 @@
    commitear el snapshot.
 4. Pedir review a ciberseguridad. Mergear solo con su aprobación.
 
-> Nota ESM: si el proyecto es `"type": "module"`, correr los scripts auxiliares
-> con `tsx` o `ts-node --esm` (no `ts-node` plano).
+> Nota: los scripts auxiliares (doctor + snapshot) necesitan un ejecutor TS.
+> Canónico `tsx` (CJS y ESM sin flags); con `ts-node` plano, en ESM usar
+> `ts-node --esm`. Instalar `tsx` si el proyecto no tiene ya un ejecutor TS.
 
 ## 7.2 Spec que valida contra el snapshot
 
@@ -27,8 +28,9 @@ aprobado en cada PR.
 
 1. `references/templates/security-gate.yml` → `.github/workflows/security-gate.yml`.
 2. `references/templates/jest-security-release.config.ts` →
-   `test/security/jest-security-release.config.ts` (camino Vitest: análogo con
-   `vitest-security-release.config.ts` apuntando al reporter Vitest).
+   `test/security/jest-security-release.config.ts` (camino Vitest: análogo
+   `vitest-security-release.config.ts`, mismo reporter universal `html-reporter.js`
+   instanciado como en `runner-setup.md`).
 3. Scripts:
    ```jsonc
    {

@@ -8,8 +8,8 @@ const os = require('os');
 const REPORTER_VERSION = '2.0.0';
 
 // ─── Per-process run id ─────────────────────────────────────────────────────
-// metadata.ts and html-reporter.js share this convention so multiple Jest
-// workers (or simultaneous CI jobs) never mix metadata files.
+// metadata.ts and html-reporter.js share this convention so multiple runner
+// workers (Jest/Vitest) or simultaneous CI jobs never mix metadata files.
 function resolveTempDir() {
   if (process.env.SECURITY_REPORTER_TEMP_DIR) {
     return process.env.SECURITY_REPORTER_TEMP_DIR;
@@ -104,7 +104,7 @@ class SecurityHtmlReporter {
       0,
     );
     await this.renderReport(normalizedTests, {
-      rootDir: this.globalConfig?.rootDir || process.cwd(),
+      rootDir: this.rootDir || process.cwd(),
       durationMs,
       suites: results.testResults.length,
     });

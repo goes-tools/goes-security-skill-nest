@@ -243,9 +243,11 @@ protection, SMTP, flujo rojo→violeta): `references/ci-gate-setup.md`.
 
 Copiar `references/templates/security-doctor.ts` → `scripts/security-doctor.ts` y
 el pre-commit `references/templates/pre-commit-pentest-history.sh` → `.husky/pre-commit`.
-Agregar devDeps `js-yaml`, `@types/js-yaml`, `glob` y script
-`"security:doctor": "tsx scripts/security-doctor.ts"` (o `ts-node`/`ts-node --esm`
-según el proyecto). Ejecutar:
+Agregar devDeps `js-yaml`, `@types/js-yaml`, `glob` y un ejecutor TS para los
+scripts auxiliares (doctor + snapshot). Canónico: **`tsx`** (funciona en CJS y
+ESM sin flags) — instalarlo si el proyecto no tiene ya `ts-node`. Script:
+`"security:doctor": "tsx scripts/security-doctor.ts"` (si el proyecto ya usa
+`ts-node`, reemplazar por `ts-node` / `ts-node --esm` en ESM). Ejecutar:
 
 ```bash
 npm run test:security:html    # suite completa
