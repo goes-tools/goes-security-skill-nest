@@ -34,6 +34,31 @@ El reporter se **referencia** desde `.claude/skills/.../reporter/`, no se duplic
 
 ---
 
+## Permisos: agilizar la ejecución sin decidir por el usuario
+
+Para no pedir confirmación en cada comando, al INICIO ofrecer aplicar el allowlist
+**acotado** de `references/examples/settings.skill.json` al `.claude/settings.json`
+(equipo) o `.claude/settings.local.json` (personal) del proyecto. Con **una sola
+aceptación**, la skill ejecuta sus instalaciones, edits en `test/security/`,
+scripts `test:security:*`/`security:doctor` y greps sin prompts por comando. Si el
+usuario lo rechaza, la skill funciona igual, solo que pidiendo permiso por comando.
+
+**El allowlist cubre el "cómo" (ejecutar); NO el "qué" (criterio).** Estas
+decisiones SIEMPRE se preguntan con `AskUserQuestion`, aunque exista el allowlist
+— aceptar la skill NO equivale a decidirlas por el usuario:
+
+- **Instalar Jest o Vitest** cuando el proyecto no tiene runner, o tiene otro
+  (Mocha/Jasmine/AVA). Nunca elegir por él.
+- **Runner ambiguo** (Jest y Vitest presentes y el script `test` no aclara).
+- **Modo audit-only** vs aplicar fixes en `src/`, si el usuario no lo declaró.
+- **Riesgos aceptados**: los decide el equipo + review de CODEOWNERS; la IA no
+  los inventa para silenciar un rojo.
+
+Regla: permiso de herramienta ≠ decisión de producto. El allowlist quita fricción;
+las bifurcaciones de criterio siguen siendo del usuario.
+
+---
+
 ## PASO 0 — Detectar el test runner (antes de instalar NADA)
 
 Leer `references/runner-setup.md`. Resumen:
