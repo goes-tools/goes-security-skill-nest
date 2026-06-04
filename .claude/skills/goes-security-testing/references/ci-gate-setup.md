@@ -42,10 +42,15 @@ aprobado en cada PR.
 
 ### Variables y secrets (una vez por repo)
 
-**Variables:** `RELEASE_BASE_URL` (URL del ambiente release/uat/main).
+**El gate NO requiere variables ni secrets para funcionar.** Testea el código del
+PR completo con boot local (`createNestApplication`), sin tocar ningún ambiente
+desplegado.
 
-**Secrets:** `SECURITY_TEST_USER`, `SECURITY_TEST_PASSWORD` (usuario de prueba con
-rol mínimo).
+**Opcional — chequeo de drift contra un ambiente desplegado:** si querés correr
+el snapshot (pattern 31) contra una URL real, definí `SECURITY_TEST_BASE_URL` (y,
+si el endpoint lo requiere, `SECURITY_TEST_USER`/`SECURITY_TEST_PASSWORD`) al
+invocar `npm run test:security:release`. No es un job del gate ni un check
+obligatorio; es una corrida externa/manual.
 
 **SMTP (envío de PDF al líder tras merge a rama protegida):** `SMTP_HOST`,
 `SMTP_USER`, `SMTP_PASSWORD`, opcionales `SMTP_PORT` (587), `SMTP_SECURE` (false),
@@ -70,8 +75,8 @@ Settings → Branches → Add rule:
 - [x] Require status checks to pass before merging
   - [x] Require branches to be up to date
   - Checks: `Verify gate integrity`, `Security tests (local build)`,
-    `Checklist GOES coverage gate`, `Security doctor (skill compliance)`;
-    en uat/main además `Security tests (release env)`
+    `Checklist GOES coverage gate`, `Security doctor (skill compliance)`
+    (todos corren local; no hay check de ambiente desplegado)
 - [x] Require conversation resolution before merging
 - [x] **Do not allow bypassing the above settings** (nadie, ni admins, mergea con rojos)
 - Allow specified actors to bypass PRs: **VACÍO**

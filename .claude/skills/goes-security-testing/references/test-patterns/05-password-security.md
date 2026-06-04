@@ -23,6 +23,16 @@ it('PENTEST: should hash passwords with bcrypt, Argon2, or PBKDF2', async () => 
   await allure.tag('Pentest');
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R15');
+
+  allure.remediation({
+    summary: 'Las contrasenas se almacenan en texto plano o con hash debil. Si la BD se filtra, todas las contrasenas son crackeables.',
+    howWeChecked: [
+      'Registramos un usuario y capturamos la contrasena almacenada',
+      'Esperabamos un hash bcrypt/Argon2/PBKDF2 con cost >= 10',
+      'Encontramos texto plano o hash sin salt/cost',
+    ],
+    whyItMatters: 'Una BD filtrada con hashes debiles equivale a contrasenas en texto plano: rainbow tables las crackean en segundos.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Weak Hashing** — Using MD5, SHA1, or SHA256 alone allows attackers\n' +
@@ -73,6 +83,16 @@ it('PENTEST: should reject weak passwords', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R31');
+
+  allure.remediation({
+    summary: 'El sistema acepta contrasenas debiles que coinciden con el username o email del usuario.',
+    howWeChecked: [
+      'Intentamos registrar con password = email del usuario',
+      'Esperabamos rechazo por contrasena debil',
+      'El sistema acepto la contrasena',
+    ],
+    whyItMatters: 'Contrasenas iguales al username son las primeras que prueba cualquier ataque de fuerza bruta.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Weak Passwords** — Users choose easily guessable passwords\n' +
@@ -120,6 +140,16 @@ it('should store passwords only on the server side', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R30');
+
+  allure.remediation({
+    summary: 'La contrasena aparece en alguna response API o esta accesible desde el browser.',
+    howWeChecked: [
+      'Hicimos GET a endpoints como /api/users, /api/auth/me',
+      'Inspeccionamos la response buscando el campo `password` o `passwordHash`',
+      'La response incluye el campo de contrasena',
+    ],
+    whyItMatters: 'Exponer la contrasena permite ataques offline: el atacante crackea el hash en su propia maquina sin rate limit.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that password hashes are never included in any API response,\n' +
@@ -159,6 +189,16 @@ it('R11/R31 — password DTO MUST enforce 12-32 length with NO arbitrary complex
   await allure.tag('Auth');
   await allure.tag('GOES Checklist R11');
   await allure.tag('GOES Checklist R31');
+
+  allure.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify the password DTO uses `@MinLength(12)` and `@MaxLength(32)` ONLY.\n' +

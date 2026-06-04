@@ -23,6 +23,16 @@ it('PENTEST: should set all security flags on auth cookies', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R42');
+
+  allure.remediation({
+    summary: 'Las cookies no tienen los flags de seguridad correctos.',
+    howWeChecked: [
+      'Inspeccionamos las cookies de la response',
+      'Esperabamos HttpOnly + Secure + SameSite',
+      'Faltan uno o mas flags',
+    ],
+    whyItMatters: 'Sin HttpOnly, XSS roba la cookie. Sin Secure, se transmite en HTTP. Sin SameSite, vulnerable a CSRF cross-site.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Cookie Theft** — Without HttpOnly, scripts can steal cookies via XSS.\n' +
@@ -82,6 +92,16 @@ it('should align cookie max-age with refresh token lifetime', async () => {
   await allure.severity('critical');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R51');
+
+  allure.remediation({
+    summary: 'La cookie del refresh token expira antes o despues del token mismo.',
+    howWeChecked: [
+      'Inspeccionamos el max-age de la cookie',
+      'Comparamos con el `exp` del refresh token',
+      'No coinciden — desincronizados',
+    ],
+    whyItMatters: 'Si la cookie sobrevive al token, el browser sigue enviandola sin validez.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the cookie max-age matches the refresh token lifetime.\n' +

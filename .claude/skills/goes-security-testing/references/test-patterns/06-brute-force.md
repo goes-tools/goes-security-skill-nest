@@ -23,6 +23,16 @@ it('PENTEST: should lock account after 5 failed login attempts', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R27');
+
+  allure.remediation({
+    summary: 'El sistema permite intentos ilimitados de login.',
+    howWeChecked: [
+      'Intentamos 6 logins fallidos seguidos con la misma cuenta',
+      'Esperabamos bloqueo o captcha tras 3-5 intentos',
+      'El sistema permitio mas de 5 intentos sin friccion',
+    ],
+    whyItMatters: 'Sin lockout, una cuenta es crackeable en horas con un diccionario comun.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Brute Force** — An attacker tries thousands of passwords\n' +
@@ -68,6 +78,16 @@ it('should reset failed attempt counter after successful login', async () => {
   await allure.severity('normal');
   await allure.tag('Auth');
   await allure.tag('GOES Checklist R27');
+
+  allure.remediation({
+    summary: 'El sistema permite intentos ilimitados de login.',
+    howWeChecked: [
+      'Intentamos 6 logins fallidos seguidos con la misma cuenta',
+      'Esperabamos bloqueo o captcha tras 3-5 intentos',
+      'El sistema permitio mas de 5 intentos sin friccion',
+    ],
+    whyItMatters: 'Sin lockout, una cuenta es crackeable en horas con un diccionario comun.',
+  });
   await allure.description(
     '## Objective\n' +
     'After a successful login, the failed attempt counter should reset\n' +

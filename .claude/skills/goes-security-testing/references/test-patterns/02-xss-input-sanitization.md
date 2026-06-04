@@ -26,6 +26,16 @@ it('PENTEST: should sanitize user input to prevent XSS injection', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A03');
   await allure.tag('GOES Checklist R5');
+
+  allure.remediation({
+    summary: 'El sistema no esta sanitizando inputs antes de almacenarlos o reflejarlos. Un atacante puede inyectar scripts maliciosos via campos de texto.',
+    howWeChecked: [
+      'Enviamos payloads XSS clasicos: <script>, <img onerror>, <svg onload>',
+      'Esperabamos que el sistema rechace, escape o sanitice',
+      'El payload llego intacto al storage o se reflejo en la response',
+    ],
+    whyItMatters: 'XSS permite robar sesiones de otros usuarios, ejecutar acciones en su nombre, capturar credenciales, o defacement del sitio.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Cross-Site Scripting (XSS)** — An attacker injects malicious scripts\n' +
@@ -77,6 +87,16 @@ it('PENTEST: should not expose sensitive data in source files or responses', asy
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R3');
   await allure.tag('GOES Checklist R4');
+
+  allure.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Sensitive Data Exposure** — API responses or source files contain\n' +
@@ -122,6 +142,16 @@ it('R5/R11 — DTOs declare class-validator constraints on user-input fields', a
   t.story('Los DTOs de entrada de usuario tienen decoradores @IsString, @MaxLength, etc.');
   t.severity('blocker');
   t.tag('Config', 'OWASP A03', 'GOES Checklist R5', 'GOES Checklist R11');
+
+  t.remediation({
+    summary: 'El sistema no esta sanitizando inputs antes de almacenarlos o reflejarlos. Un atacante puede inyectar scripts maliciosos via campos de texto.',
+    howWeChecked: [
+      'Enviamos payloads XSS clasicos: <script>, <img onerror>, <svg onload>',
+      'Esperabamos que el sistema rechace, escape o sanitice',
+      'El payload llego intacto al storage o se reflejo en la response',
+    ],
+    whyItMatters: 'XSS permite robar sesiones de otros usuarios, ejecutar acciones en su nombre, capturar credenciales, o defacement del sitio.',
+  });
 
   // Adapt to your project: import each user-input DTO that wraps a request body.
   // import { CreateUserDto } from '../../src/users/dto/create-user.dto';

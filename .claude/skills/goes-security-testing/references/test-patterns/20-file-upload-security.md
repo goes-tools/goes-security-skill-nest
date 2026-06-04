@@ -33,6 +33,16 @@ it('PENTEST: should validate file extension AND magic bytes', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A03');
   await allure.tag('GOES Checklist R57');
+
+  allure.remediation({
+    summary: 'Solo se valida la extension o el content-type.',
+    howWeChecked: [
+      'Subimos archivos con extension valida pero contenido malicioso (.jpg con PHP dentro)',
+      'Esperabamos rechazo por magic bytes',
+      'El sistema lo acepto',
+    ],
+    whyItMatters: 'Sin verificacion de magic bytes, un atacante sube shells PHP/JSP disfrazados de imagenes.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**File Type Spoofing** — An attacker renames a PHP/EXE file to .jpg\n' +
@@ -79,6 +89,16 @@ it('should only accept files with whitelisted extensions', async () => {
   await allure.severity('blocker');
   await allure.tag('Auth');
   await allure.tag('GOES Checklist R58');
+
+  allure.remediation({
+    summary: 'El sistema acepta cualquier extension o usa blacklist.',
+    howWeChecked: [
+      'Subimos archivos con extensiones inseguras (.exe, .php, .sh)',
+      'Esperabamos rechazo',
+      'El sistema acepto algunas',
+    ],
+    whyItMatters: 'Blacklists siempre tienen huecos. Whitelist explicita (.pdf, .jpg, .png) es la unica forma segura.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that only whitelisted file extensions are accepted.\n' +
@@ -114,6 +134,16 @@ it('should enforce maximum file size limit', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP API4');
   await allure.tag('GOES Checklist R59');
+
+  allure.remediation({
+    summary: 'No hay limite de tamano.',
+    howWeChecked: [
+      'Subimos un archivo de 50MB o mas',
+      'Esperabamos rechazo por tamano',
+      'El sistema lo acepto',
+    ],
+    whyItMatters: 'Sin limite, atacante hace DoS o llena el disco.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that files exceeding the max size (e.g., 10MB) are rejected.\n' +
@@ -147,6 +177,16 @@ it('should rename uploaded files with UUID (never use original name)', async () 
   await allure.severity('critical');
   await allure.tag('Auth');
   await allure.tag('GOES Checklist R60');
+
+  allure.remediation({
+    summary: 'Los archivos mantienen su nombre original.',
+    howWeChecked: [
+      'Subimos archivo con nombre malicioso (../../etc/passwd)',
+      'Esperabamos rename a UUID',
+      'El sistema mantuvo el nombre original',
+    ],
+    whyItMatters: 'Mantener nombres permite path traversal.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that uploaded files are stored with a UUID-generated name,\n' +

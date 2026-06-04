@@ -23,7 +23,7 @@ El snapshot vive en el proyecto bajo test:
 ```
 
 El snapshot es un JSON declarativo con los valores esperados. Contra un ambiente
-**desplegado** (`SECURITY_TEST_BASE_URL`, job de release) el test captura los
+**desplegado** (`SECURITY_TEST_BASE_URL`, corrida de release opcional) el test captura los
 valores reales por HTTP y los compara byte-a-byte; en la suite **local** no se
 levanta la app (ver el código abajo): los items HTTP se marcan N/A + verificación
 estática. La única forma de cambiar el snapshot es un PR explícito que
@@ -122,11 +122,11 @@ const SNAPSHOT = JSON.parse(
 );
 
 // El drift de configuracion se valida contra un ambiente DESPLEGADO (job
-// security-tests-release con SECURITY_TEST_BASE_URL). La suite LOCAL NO levanta
+// una corrida de release con SECURITY_TEST_BASE_URL). La suite LOCAL NO levanta
 // AppModule: requiere DB, llaves RSA (JWT_*_KEY_BASE64) y config externa validada
 // por Zod; hacerlo haria fallar el spec en `npm run test:security:html` por falta
 // de infra, no por un hallazgo real. Localmente cada item HTTP se marca N/A +
-// verificacion estatica del snapshot; el chequeo runtime corre en el job de release.
+// verificacion estatica del snapshot; el chequeo runtime corre en la corrida de release (SECURITY_TEST_BASE_URL).
 const BASE_URL = process.env.SECURITY_TEST_BASE_URL || '';
 const http = () => request(BASE_URL);
 
@@ -143,7 +143,7 @@ async function naIfLocal(t: ReturnType<typeof report>): Promise<boolean> {
     keys: Object.keys(SNAPSHOT || {}),
   });
   t.notApplicable(
-    'Drift runtime se valida en el job security-tests-release (SECURITY_TEST_BASE_URL). ' +
+    'Drift runtime se valida en una corrida de release opcional (SECURITY_TEST_BASE_URL). ' +
       'Local: solo verificacion estatica. Snapshot coherente: ' + snapshotIsCoherent(),
   );
   await t.flush();
@@ -166,6 +166,17 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
       t.tag(`GOES Checklist ${r}`);
     }
     if (await naIfLocal(t)) return;
+
+  t.remediation({
+    summary: 'Los headers HTTP runtime no coinciden con los valores aprobados en security.snapshot.json. Algo cambio entre el snapshot aprobado y la respuesta actual del backend.',
+    howWeChecked: [
+      'Cargamos los valores aprobados desde test/security/security.snapshot.json',
+      'Hicimos GET a /api/health y a / para capturar headers actuales',
+      'Comparamos cada header esperado vs el valor real',
+      'Encontramos drift en uno o mas headers',
+    ],
+    whyItMatters: 'El snapshot es el contrato firmado de los valores de seguridad. Cualquier drift puede haber sido un cambio accidental, un downgrade silencioso o un override no documentado. Toda divergencia requiere PR + aprobacion explicita.',
+  });
 
     // Sample endpoint que devuelve headers reales (cualquier endpoint sirve)
     const probes = ['/api/health', '/'];
@@ -232,6 +243,16 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
     t.tag('Config', 'OWASP A05', 'GOES Checklist R38', 'GOES Checklist R39');
     if (await naIfLocal(t)) return;
 
+  t.remediation({
+    summary: 'CORS acepta origenes no autorizados (localhost, dominios de prueba, *).',
+    howWeChecked: [
+      'Hicimos OPTIONS preflight desde Origin: http://attacker.test',
+      'Esperabamos que Access-Control-Allow-Origin NO incluya ese origen',
+      'El sistema acepto el origen no autorizado',
+    ],
+    whyItMatters: 'CORS permisivo permite ataques de CSRF: un sitio malicioso visitado por el usuario hace requests autenticados a la API.',
+  });
+
     const violations: Array<{ kind: string; origin?: string; actual?: string }> = [];
 
     // Origenes prohibidos: ninguno debe ser aceptado
@@ -274,6 +295,16 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
     t.tag('Config', 'GOES Checklist R8', 'Pentest Regression VULN-XXX-NNNN');
     if (await naIfLocal(t)) return;
 
+  t.remediation({
+    summary: 'Las respuestas de error exponen detalles tecnicos (rutas, stack traces, queries SQL) que dan reconocimiento al atacante.',
+    howWeChecked: [
+      'Forzamos un error en el endpoint con un payload invalido',
+      'Esperabamos un body con solo {statusCode, message}',
+      'El sistema devolvio path, timestamp, stack trace o query SQL',
+    ],
+    whyItMatters: 'Los detalles del error facilitan la enumeracion de la API y la identificacion del stack tecnologico.',
+  });
+
     const res = await http()
       .post('/api/auth/login')
       .send({ malformed: true });
@@ -300,6 +331,16 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
     t.story('Access/refresh/idle timeouts coinciden con valores aprobados');
     t.severity('critical');
     t.tag('Config', 'GOES Checklist R13', 'GOES Checklist R35');
+
+  t.remediation({
+    summary: 'Los tokens JWT tienen tiempos de vida demasiado largos. Si un token se filtra, el atacante tiene acceso por horas o dias.',
+    howWeChecked: [
+      'Decodificamos el JWT emitido tras login',
+      'Inspeccionamos los claims `exp` y `iat`',
+      'El TTL excede los limites: access > 15min o refresh > 7 dias',
+    ],
+    whyItMatters: 'Tokens largos amplifican el dano de cualquier filtracion. Tokens cortos limitan la ventana de oportunidad del atacante.',
+  });
 
     // Capa 2: leer env y comparar
     const accessTtl = parseInt(process.env.ACCESS_TOKEN_TTL_MIN || '0', 10);

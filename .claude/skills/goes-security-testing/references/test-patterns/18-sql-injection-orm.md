@@ -26,6 +26,16 @@ it('PENTEST: should use ORM for all queries (no raw SQL concatenation)', async (
   await allure.tag('Pentest');
   await allure.tag('OWASP A03');
   await allure.tag('GOES Checklist R37');
+
+  allure.remediation({
+    summary: 'El codigo usa raw queries con concatenacion de strings.',
+    howWeChecked: [
+      'Buscamos $queryRawUnsafe, .query(), createQueryRunner en src/',
+      'Encontramos queries con interpolacion de variables ${...}',
+      'Las variables vienen del request sin sanitizar',
+    ],
+    whyItMatters: 'SQL injection permite leer cualquier tabla, modificar datos, ejecutar comandos en la BD.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**SQL Injection** — Attackers inject malicious SQL through user\n' +
@@ -84,6 +94,16 @@ it('PENTEST: should prevent NoSQL injection in query parameters', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A03');
   await allure.tag('GOES Checklist R37');
+
+  allure.remediation({
+    summary: 'El codigo usa raw queries con concatenacion de strings.',
+    howWeChecked: [
+      'Buscamos $queryRawUnsafe, .query(), createQueryRunner en src/',
+      'Encontramos queries con interpolacion de variables ${...}',
+      'Las variables vienen del request sin sanitizar',
+    ],
+    whyItMatters: 'SQL injection permite leer cualquier tabla, modificar datos, ejecutar comandos en la BD.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**NoSQL Injection** — Attackers send objects with MongoDB operators\n' +
@@ -124,6 +144,16 @@ it('R37 — Source code does NOT use raw SQL or string-interpolated queries', as
   t.story('Codigo fuente NO usa $queryRaw, $executeRaw, query() ni concat manual de SQL');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A03', 'GOES Checklist R37');
+
+  t.remediation({
+    summary: 'El codigo usa raw queries con concatenacion de strings.',
+    howWeChecked: [
+      'Buscamos $queryRawUnsafe, .query(), createQueryRunner en src/',
+      'Encontramos queries con interpolacion de variables ${...}',
+      'Las variables vienen del request sin sanitizar',
+    ],
+    whyItMatters: 'SQL injection permite leer cualquier tabla, modificar datos, ejecutar comandos en la BD.',
+  });
 
   const fs = require('fs');
   const path = require('path');

@@ -23,6 +23,16 @@ it('PENTEST: should enforce short-lived access tokens', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R13');
+
+  allure.remediation({
+    summary: 'Los tokens JWT tienen tiempos de vida demasiado largos. Si un token se filtra, el atacante tiene acceso por horas o dias.',
+    howWeChecked: [
+      'Decodificamos el JWT emitido tras login',
+      'Inspeccionamos los claims `exp` y `iat`',
+      'El TTL excede los limites: access > 15min o refresh > 7 dias',
+    ],
+    whyItMatters: 'Tokens largos amplifican el dano de cualquier filtracion. Tokens cortos limitan la ventana de oportunidad del atacante.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Token Theft Persistence** — If access tokens have long lifetimes,\n' +
@@ -64,6 +74,16 @@ it('R13 — Login response includes both accessToken and refreshToken', async ()
   t.story('El response de /auth/login devuelve accessToken Y refreshToken');
   t.severity('blocker');
   t.tag('Auth', 'OWASP A07', 'GOES Checklist R13', 'GOES Checklist R32');
+
+  t.remediation({
+    summary: 'Los tokens JWT tienen tiempos de vida demasiado largos. Si un token se filtra, el atacante tiene acceso por horas o dias.',
+    howWeChecked: [
+      'Decodificamos el JWT emitido tras login',
+      'Inspeccionamos los claims `exp` y `iat`',
+      'El TTL excede los limites: access > 15min o refresh > 7 dias',
+    ],
+    whyItMatters: 'Tokens largos amplifican el dano de cualquier filtracion. Tokens cortos limitan la ventana de oportunidad del atacante.',
+  });
 
   prisma.user.findUnique.mockResolvedValue({
     id: '1',
@@ -117,6 +137,16 @@ it('PENTEST: should use RS256 or ES256 for JWT signing', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R16');
+
+  allure.remediation({
+    summary: 'El JWT esta firmado con HS256 (clave simetrica) o no esta firmado. Esto permite forjar tokens si la clave se filtra.',
+    howWeChecked: [
+      'Decodificamos el JWT y leimos el header',
+      'Esperabamos `alg: RS256` o `ES256`',
+      'Encontramos `alg: HS256` o `alg: none`',
+    ],
+    whyItMatters: 'HS256 usa una clave compartida: si se filtra (logs, codigo, config), cualquiera puede forjar tokens de cualquier usuario.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**JWT Algorithm Attack** — Using "none" or HS256 with a weak\n' +
@@ -150,6 +180,16 @@ it('PENTEST: should validate all JWT claims on every request', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R19');
+
+  allure.remediation({
+    summary: 'El sistema no valida todos los claims criticos del JWT. Permite ataques de replay, tokens de otros emisores, o tokens expirados.',
+    howWeChecked: [
+      'Enviamos JWTs con `exp` vencido, `iss` falso, `aud` incorrecto',
+      'Esperabamos rechazo en cada caso',
+      'El sistema acepto al menos uno como valido',
+    ],
+    whyItMatters: 'Sin validacion completa, un atacante puede reutilizar tokens vencidos o tokens emitidos por otro sistema.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Token Forgery** — Without full claims validation, attackers can\n' +
@@ -190,6 +230,16 @@ it('PENTEST: should NOT store sensitive data in JWT payload', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A02');
   await allure.tag('GOES Checklist R20');
+
+  allure.remediation({
+    summary: 'El JWT lleva datos sensibles en su payload. JWT no esta encriptado, cualquiera puede decodificarlo.',
+    howWeChecked: [
+      'Capturamos un JWT del flujo de login',
+      'Decodificamos el payload (sin verificar firma)',
+      'Encontramos campos sensibles: DUI completo, hash de password, datos personales',
+    ],
+    whyItMatters: 'JWT es solo firmado, no encriptado. Cualquiera con acceso al token ve todo el payload en claro.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Sensitive Data in JWT** — JWT payloads are base64-encoded (not encrypted).\n' +

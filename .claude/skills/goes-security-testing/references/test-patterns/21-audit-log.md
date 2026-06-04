@@ -23,6 +23,16 @@ it('should create an audit log entry when creating a resource', async () => {
   await allure.tag('Audit');
   await allure.tag('OWASP A09');
   await allure.tag('GOES Checklist R10');
+
+  allure.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that every write operation generates an audit log\n' +
@@ -64,6 +74,16 @@ it('should log failed login attempts with IP and timestamp', async () => {
   await allure.tag('Audit');
   await allure.tag('OWASP A09');
   await allure.tag('GOES Checklist R10');
+
+  allure.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that failed login attempts are logged with:\n' +
@@ -111,6 +131,16 @@ it('should NOT log sensitive data (passwords, tokens, secrets)', async () => {
   await allure.tag('Audit');
   await allure.tag('OWASP A09');
   await allure.tag('GOES Checklist R10');
+
+  allure.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that audit logs never contain:\n' +

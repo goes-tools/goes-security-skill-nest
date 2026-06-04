@@ -502,43 +502,6 @@ jobs:
             >
             > 3. **Bug real**: arreglá el código en `src/` y dejá el test rojo hasta que pase verde.
 
-  security-tests-release:
-    name: Security tests (release env)
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs: security-tests-local
-    # Corre la suite contra ambientes desplegados solo en PRs hacia uat/main/release.
-    # En dev/qa el smoke local del job security-tests-local alcanza.
-    if: github.event_name == 'pull_request' && contains(fromJSON('["uat","main","master"]'), github.base_ref) || startsWith(github.base_ref, 'release/')
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run security suite against deployed release env
-        run: npm run test:security:release
-        env:
-          SECURITY_TEST_BASE_URL: ${{ vars.RELEASE_BASE_URL }}
-          TEST_USER_EMAIL: ${{ secrets.SECURITY_TEST_USER }}
-          TEST_USER_PASSWORD: ${{ secrets.SECURITY_TEST_PASSWORD }}
-
-      - name: Upload HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-report-release
-          path: reports/security/security-report.html
-          retention-days: 90
-
   checklist-coverage:
     name: Checklist GOES coverage gate
     runs-on: ubuntu-latest

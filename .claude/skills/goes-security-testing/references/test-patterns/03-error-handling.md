@@ -23,6 +23,16 @@ it('should return generic error messages without exposing internals', async () =
   await allure.tag('Config');
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R8');
+
+  allure.remediation({
+    summary: 'Las respuestas de error exponen detalles tecnicos (rutas, stack traces, queries SQL) que dan reconocimiento al atacante.',
+    howWeChecked: [
+      'Forzamos un error en el endpoint con un payload invalido',
+      'Esperabamos un body con solo {statusCode, message}',
+      'El sistema devolvio path, timestamp, stack trace o query SQL',
+    ],
+    whyItMatters: 'Los detalles del error facilitan la enumeracion de la API y la identificacion del stack tecnologico.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that all error responses return generic messages.\n' +
@@ -71,6 +81,16 @@ it('should return 404 for undefined routes', async () => {
   await allure.severity('normal');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R22');
+
+  allure.remediation({
+    summary: 'El sistema responde con 200, 500 o errores informativos en rutas inexistentes, permitiendo enumerar endpoints validos.',
+    howWeChecked: [
+      'Hicimos GET a rutas tipicas (/admin, /.env, /wp-admin)',
+      'Esperabamos 404 plano sin info adicional',
+      'El sistema respondio con codigo o body diferente que confirma cuales rutas existen',
+    ],
+    whyItMatters: 'La diferencia en respuestas permite enumerar la API completa y planificar ataques dirigidos.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the application returns 404 for any undefined route,\n' +
@@ -229,6 +249,16 @@ it('R8 config — HttpExceptionFilter MUST be registered globally and not leak r
   await allure.tag('Config');
   await allure.tag('GOES Checklist R8');
   await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  allure.remediation({
+    summary: 'Las respuestas de error exponen detalles tecnicos (rutas, stack traces, queries SQL) que dan reconocimiento al atacante.',
+    howWeChecked: [
+      'Forzamos un error en el endpoint con un payload invalido',
+      'Esperabamos un body con solo {statusCode, message}',
+      'El sistema devolvio path, timestamp, stack trace o query SQL',
+    ],
+    whyItMatters: 'Los detalles del error facilitan la enumeracion de la API y la identificacion del stack tecnologico.',
+  });
 
   const fs = require('fs');
   const path = require('path');

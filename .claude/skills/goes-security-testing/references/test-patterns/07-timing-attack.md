@@ -23,6 +23,16 @@ it('PENTEST: should respond in constant time when email does not exist', async (
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R14');
+
+  allure.remediation({
+    summary: 'El sistema no tiene proteccion contra ataques de auth: sin MFA, sin captcha en endpoints sensibles, sin rate limit en login.',
+    howWeChecked: [
+      'Verificamos si el endpoint sensible tiene guard de captcha',
+      'Esperabamos que un request sin token captcha sea rechazado',
+      'El sistema permitio el request sin captcha',
+    ],
+    whyItMatters: 'Sin captcha en endpoints publicos sensibles, un atacante automatiza enumeracion masiva sin que el rate limit lo detenga.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Timing Attack** — If the server responds faster when the\n' +

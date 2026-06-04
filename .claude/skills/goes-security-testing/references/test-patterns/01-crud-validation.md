@@ -23,6 +23,16 @@ it('should create a record successfully with valid data', async () => {
   await allure.tag('CRUD');
   await allure.tag('Happy Path');
   await allure.tag('GOES Checklist R11');
+
+  allure.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the service creates a record correctly when receiving valid data.\n\n' +
@@ -62,6 +72,16 @@ it('should reject invalid DTO with missing required fields', async () => {
   await allure.severity('critical');
   await allure.tag('Validation');
   await allure.tag('GOES Checklist R11');
+
+  allure.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the service rejects DTOs that are missing required fields,\n' +
@@ -98,6 +118,16 @@ it('PENTEST: should reject DTO with extra (non-whitelisted) fields', async () =>
   await allure.tag('OWASP A03');
   await allure.tag('OWASP API3');
   await allure.tag('GOES Checklist R11');
+
+  allure.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Mass Assignment / Property Pollution** — Attacker sends extra fields\n' +
@@ -144,6 +174,16 @@ it('R11 config — ValidationPipe MUST have whitelist + forbidNonWhitelisted', a
   await allure.severity('blocker');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R11');
+
+  allure.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
 
   // Inspeccion estatica de main.ts (comentado = ausente)
   const fs = require('fs');

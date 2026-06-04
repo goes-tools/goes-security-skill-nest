@@ -28,6 +28,16 @@ it('should configure all required HTTP security headers', async () => {
   await allure.tag('GOES Checklist R47');
   await allure.tag('GOES Checklist R48');
   await allure.tag('GOES Checklist R49');
+
+  allure.remediation({
+    summary: 'CSP permite estilos inline o eval.',
+    howWeChecked: [
+      'Inspeccionamos el header Content-Security-Policy',
+      'Buscamos las palabras clave unsafe-inline, unsafe-eval, unsafe-hashes',
+      'Las encontramos en script-src o style-src',
+    ],
+    whyItMatters: 'unsafe-inline desactiva la proteccion CSP contra XSS.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that all HTTP security headers are correctly configured\n' +
@@ -126,6 +136,16 @@ it('should set Cache-Control: no-store for sensitive responses', async () => {
   await allure.severity('critical');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R50');
+
+  allure.remediation({
+    summary: 'Endpoints sensibles permiten cache.',
+    howWeChecked: [
+      'GET a endpoints sensibles (/me, /admin, /auth/*)',
+      'Esperabamos Cache-Control: no-store',
+      'No esta o tiene max-age positivo',
+    ],
+    whyItMatters: 'Sin no-store, data sensible queda en el cache del browser/proxy.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that sensitive endpoints (user profile, auth, admin)\n' +
@@ -282,6 +302,16 @@ it('PENTEST R45 — Cross-Origin-* hardening (CORP/COOP/COEP) for internal admin
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R45');
   await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  allure.remediation({
+    summary: 'Faltan headers basicos contra mime-sniffing y clickjacking.',
+    howWeChecked: [
+      'GET a cualquier endpoint y revisar headers',
+      'Esperabamos X-Content-Type-Options: nosniff y X-Frame-Options: DENY',
+      'Faltan ambos o uno',
+    ],
+    whyItMatters: 'Sin nosniff, el browser puede interpretar archivos como JS aunque sean PDF. Sin X-Frame-Options, vulnerable a clickjacking.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     'VULN-XXX-NNNN reporto `Cross-Origin-Resource-Policy: cross-origin` en\n' +

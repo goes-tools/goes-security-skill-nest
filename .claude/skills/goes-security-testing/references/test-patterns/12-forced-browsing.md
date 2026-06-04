@@ -23,6 +23,16 @@ it('PENTEST: should block forced navigation to protected routes', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A01');
   await allure.tag('GOES Checklist R21');
+
+  allure.remediation({
+    summary: 'Endpoints privados son accesibles directamente conociendo la URL, sin autenticacion ni redireccion.',
+    howWeChecked: [
+      'Identificamos endpoints privados en el codigo',
+      'Hicimos request sin autenticacion',
+      'El sistema sirvio el contenido en vez de devolver 401/redireccion',
+    ],
+    whyItMatters: 'Forced browsing permite a un atacante saltarse el flujo normal y acceder a paneles administrativos solo conociendo la URL.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Forced Browsing** — An attacker directly types URLs to access\n' +
@@ -64,6 +74,16 @@ it('should validate token on every private request', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R33');
+
+  allure.remediation({
+    summary: 'Algunos endpoints privados no validan el token.',
+    howWeChecked: [
+      'Listamos endpoints privados desde el codigo',
+      'Hicimos GET sin token a cada uno',
+      'Algunos respondieron 200 con datos en lugar de 401',
+    ],
+    whyItMatters: 'Endpoints sin validacion de token equivalen a no tener autenticacion.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the auth guard validates the JWT signature, expiration,\n' +

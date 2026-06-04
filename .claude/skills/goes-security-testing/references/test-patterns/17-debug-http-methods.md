@@ -23,6 +23,16 @@ it('should have debug mode disabled in production', async () => {
   await allure.tag('Config');
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R43');
+
+  allure.remediation({
+    summary: 'El entorno de produccion tiene modo debug activo.',
+    howWeChecked: [
+      'Verificamos NODE_ENV / variables de debug',
+      'Buscamos endpoints como /api/swagger en produccion',
+      'El sistema responde con info de debug',
+    ],
+    whyItMatters: 'Debug en prod expone toda la arquitectura interna.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that debug mode, devtools, and verbose error output\n' +
@@ -68,6 +78,16 @@ it('PENTEST: should disable HTTP TRACE method', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R53');
+
+  allure.remediation({
+    summary: 'TRACE esta habilitado.',
+    howWeChecked: [
+      'TRACE a un endpoint',
+      'Esperabamos 405 o 501',
+      'El sistema respondio reflejando el request',
+    ],
+    whyItMatters: 'TRACE combinado con XSS extrae cookies httpOnly que de otra forma estarian protegidas.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Cross-Site Tracing (XST)** — The TRACE method echoes back the\n' +
@@ -96,6 +116,16 @@ it('should disable HTTP PUT method if not used', async () => {
   await allure.severity('normal');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R52');
+
+  allure.remediation({
+    summary: 'PUT esta habilitado pero la API no lo usa.',
+    howWeChecked: [
+      'PUT a un endpoint cualquiera',
+      'Esperabamos 405 Method Not Allowed',
+      'El sistema acepto el PUT',
+    ],
+    whyItMatters: 'Habilitar metodos HTTP no usados es regla basica: cada metodo extra es superficie de ataque.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that HTTP PUT is disabled if the API uses PATCH for updates.\n' +
@@ -124,6 +154,16 @@ it('PENTEST: should disable HTTP method override', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R54');
+
+  allure.remediation({
+    summary: 'Headers como X-HTTP-Method-Override permiten enviar GET y que el server lo trate como DELETE.',
+    howWeChecked: [
+      'GET con header X-HTTP-Method-Override: DELETE',
+      'Esperabamos que se ignore el header',
+      'El sistema ejecuto el DELETE',
+    ],
+    whyItMatters: 'Method override permite saltar reglas de CORS y CSRF.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**HTTP Method Override** — Attackers use X-HTTP-Method-Override header\n' +

@@ -148,6 +148,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.severity('critical');
     t.tag('Pentest', 'OWASP A02', 'GOES Checklist R3');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
     t.step('Scan all .ts/.js files under src/');
 
     const findings: Array<{ file: string; line: number; pattern: string; snippet: string }> = [];
@@ -203,6 +213,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.severity('critical');
     t.tag('Pentest', 'OWASP A02', 'GOES Checklist R3');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
     t.step('Scan for AIza prefix (Google API Key)');
 
     const findings: Array<{ file: string; line: number; snippet: string }> = [];
@@ -236,6 +256,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.story('Ningun archivo fuente contiene AWS Access Keys');
     t.severity('blocker');
     t.tag('Pentest', 'OWASP A02', 'GOES Checklist R3');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
     t.step('Scan for AKIA pattern (AWS Access Key ID)');
 
@@ -271,6 +301,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.severity('blocker');
     t.tag('Pentest', 'OWASP A02', 'GOES Checklist R3');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
     t.step('Scan for BEGIN PRIVATE KEY patterns');
 
     const findings: Array<{ file: string; line: number }> = [];
@@ -305,6 +345,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.story('Connection strings usan env vars, no credenciales inline');
     t.severity('critical');
     t.tag('Pentest', 'OWASP A02', 'GOES Checklist R3');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
     t.step('Scan for protocol://user:pass@host patterns');
 
@@ -349,6 +399,16 @@ describe('Secrets & API Keys Detection — Static Source Scan', () => {
     t.story('Configuracion sensible viene de process.env, no hardcodeada');
     t.severity('normal');
     t.tag('OWASP A02', 'GOES Checklist R3');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
     t.step('Verify config files read from process.env');
 

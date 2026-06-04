@@ -30,6 +30,16 @@ it('PENTEST: should enforce role-based access on every endpoint', async () => {
   await allure.tag('OWASP API5');
   await allure.tag('GOES Checklist R9');
   await allure.tag('GOES Checklist R34');
+
+  allure.remediation({
+    summary: 'El servidor no valida roles/permisos: un usuario con privilegios bajos puede ejecutar acciones de privilegios altos.',
+    howWeChecked: [
+      'Autenticamos como usuario con rol bajo',
+      'Intentamos acceder a un endpoint que requiere rol alto',
+      'El servidor respondio 200 OK en lugar de 403 Forbidden',
+    ],
+    whyItMatters: 'Sin RBAC server-side, cualquier usuario puede acceder a operaciones administrativas, modificar datos de otros, o exfiltrar informacion sensible.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Missing RBAC** — Endpoints that do not check the user\'s role\n' +
@@ -75,6 +85,16 @@ it('PENTEST: should prevent privilege escalation via role manipulation', async (
   await allure.tag('Pentest');
   await allure.tag('OWASP A01');
   await allure.tag('GOES Checklist R24');
+
+  allure.remediation({
+    summary: 'Un usuario con rol bajo puede ejecutar acciones que requieren rol alto, via API directa.',
+    howWeChecked: [
+      'Autenticamos como usuario con rol bajo',
+      'Llamamos a endpoints que solo deberian ejecutar admins',
+      'El sistema permitio la accion en lugar de devolver 403',
+    ],
+    whyItMatters: 'Privilege escalation permite a un usuario regular convertirse en admin via API.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Privilege Escalation** — A regular user sends a request to\n' +
@@ -122,6 +142,16 @@ it('R9/R34 — @UseGuards + @Roles are applied on every admin endpoint', async (
   t.story('Cada endpoint administrativo tiene @UseGuards(RolesGuard) y @Roles');
   t.severity('blocker');
   t.tag('Auth', 'OWASP A01', 'OWASP API5', 'GOES Checklist R9', 'GOES Checklist R34');
+
+  t.remediation({
+    summary: 'El servidor no valida roles/permisos: un usuario con privilegios bajos puede ejecutar acciones de privilegios altos.',
+    howWeChecked: [
+      'Autenticamos como usuario con rol bajo',
+      'Intentamos acceder a un endpoint que requiere rol alto',
+      'El servidor respondio 200 OK en lugar de 403 Forbidden',
+    ],
+    whyItMatters: 'Sin RBAC server-side, cualquier usuario puede acceder a operaciones administrativas, modificar datos de otros, o exfiltrar informacion sensible.',
+  });
 
   // Adapt to your project: import controller(s) and list their protected methods.
   // import { AdminController } from '../../src/admin/admin.controller';
