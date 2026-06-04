@@ -23,6 +23,16 @@ it('PENTEST: should detect REPLAY ATTACK and revoke entire token family', async 
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R32');
+
+  allure.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Replay Attack** — An attacker intercepts a refresh token and\n' +
@@ -77,6 +87,16 @@ it('should rotate refresh token after every use', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R32');
+
+  allure.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that each time a refresh token is used, a new one is issued\n' +

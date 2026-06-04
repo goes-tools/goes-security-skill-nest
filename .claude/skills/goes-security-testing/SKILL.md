@@ -1119,14 +1119,11 @@ corre en cada PR y reporta drift contra el snapshot aprobado.
 
 ### 5.a Variables y secrets (una vez por repo)
 
-**Settings -> Secrets and variables -> Actions -> Variables:**
-   - `RELEASE_BASE_URL` con la URL del ambiente release/uat/main.
+**El gate NO requiere variables ni secrets para funcionar.** Testea el
+codigo del PR completo (boot local con createNestApplication), sin tocar
+ningun ambiente desplegado.
 
-**Settings -> Secrets and variables -> Actions -> Secrets:**
-   - `SECURITY_TEST_USER` y `SECURITY_TEST_PASSWORD`: credenciales de un
-     usuario de prueba con rol minimo (lo usa el job security-tests-release).
-
-**Para envio de reporte PDF por correo al lider de desarrollo:**
+**Settings -> Secrets and variables -> Actions -> Secrets (solo si queres email):**
 
 El workflow incluye un step que, tras cada merge a una rama protegida,
 genera un PDF del reporte HTML y lo envia por correo al lider de desarrollo
@@ -1190,7 +1187,6 @@ Settings -> Branches -> Add rule. Crear UNA regla por rama (`dev`, `qa`,
          - `Security tests (local build)`
          - `Checklist GOES coverage gate`
          - `Security doctor (skill compliance)`
-         - En `uat` y `main`: `Security tests (release env)`
 
    - [x] **Require conversation resolution before merging**
 

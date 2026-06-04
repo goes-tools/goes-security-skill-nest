@@ -96,6 +96,16 @@ it('PENTEST R3 — GET /api/auth/me MUST NOT leak DUI, internal IDs, permissions
   t.tag('Pentest', 'OWASP A02', 'OWASP API3', 'GOES Checklist R3', 'GOES Checklist R4');
   t.tag('Pentest Regression VULN-XXX-NNNN', 'Pentest Regression VULN-XXX-NNNN', 'Pentest Regression VULN-XXX-NNNN');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
   // Login + GET /me (ajustar credenciales segun el proyecto)
   const loginRes = await request(app.getHttpServer())
     .post('/api/auth/login')
@@ -152,6 +162,16 @@ it('PENTEST R3 — list endpoints (GET /users, /permits) MUST NOT leak internal 
   t.tag('Pentest', 'OWASP API1', 'GOES Checklist R3');
   t.tag('Pentest Regression VULN-XXX-NNNN');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
   // Ajustar a las rutas reales del proyecto
   const candidateEndpoints = [
     '/api/users',
@@ -187,6 +207,16 @@ it('R3 config — every *.controller.ts MUST use response DTOs OR ClassSerialize
   t.story('La superficie completa tiene control de serializacion');
   t.severity('blocker');
   t.tag('Config', 'GOES Checklist R3');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
   const fs = require('fs');
   const path = require('path');

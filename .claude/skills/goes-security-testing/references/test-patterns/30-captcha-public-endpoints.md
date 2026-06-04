@@ -67,6 +67,16 @@ it('PENTEST R14 — sensitive public endpoints MUST reject requests without capt
   t.tag('Pentest', 'OWASP A07', 'OWASP API2', 'GOES Checklist R14', 'GOES Checklist R55');
   t.tag('Pentest Regression VULN-XXX-NNNN');
 
+  t.remediation({
+    summary: 'El sistema no tiene proteccion contra ataques de auth: sin MFA, sin captcha en endpoints sensibles, sin rate limit en login.',
+    howWeChecked: [
+      'Verificamos si el endpoint sensible tiene guard de captcha',
+      'Esperabamos que un request sin token captcha sea rechazado',
+      'El sistema permitio el request sin captcha',
+    ],
+    whyItMatters: 'Sin captcha en endpoints publicos sensibles, un atacante automatiza enumeracion masiva sin que el rate limit lo detenga.',
+  });
+
   const findings: Array<{
     endpoint: string;
     reason: string;
@@ -122,6 +132,16 @@ it('R14 config — RecaptchaGuard o equivalente esta declarado en cada endpoint 
   t.severity('blocker');
   t.tag('Config', 'GOES Checklist R14');
   t.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary: 'El sistema no tiene proteccion contra ataques de auth: sin MFA, sin captcha en endpoints sensibles, sin rate limit en login.',
+    howWeChecked: [
+      'Verificamos si el endpoint sensible tiene guard de captcha',
+      'Esperabamos que un request sin token captcha sea rechazado',
+      'El sistema permitio el request sin captcha',
+    ],
+    whyItMatters: 'Sin captcha en endpoints publicos sensibles, un atacante automatiza enumeracion masiva sin que el rate limit lo detenga.',
+  });
 
   const fs = require('fs');
   const path = require('path');
@@ -191,6 +211,16 @@ it('PENTEST R14 — captcha guard MUST validate token server-side, not just pres
   t.severity('blocker');
   t.tag('Pentest', 'GOES Checklist R14');
   t.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary: 'El sistema no tiene proteccion contra ataques de auth: sin MFA, sin captcha en endpoints sensibles, sin rate limit en login.',
+    howWeChecked: [
+      'Verificamos si el endpoint sensible tiene guard de captcha',
+      'Esperabamos que un request sin token captcha sea rechazado',
+      'El sistema permitio el request sin captcha',
+    ],
+    whyItMatters: 'Sin captcha en endpoints publicos sensibles, un atacante automatiza enumeracion masiva sin que el rate limit lo detenga.',
+  });
 
   // Enviar un token de captcha obviamente falso
   const fakeToken = 'AAAAAA-fake-token-not-a-real-recaptcha-response-AAAAAA';

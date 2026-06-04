@@ -52,6 +52,16 @@ it('R61 — uploaded files MUST be stored outside the project root / webroot', a
   t.severity('critical');
   t.tag('Pentest', 'OWASP A05', 'GOES Checklist R61');
 
+  t.remediation({
+    summary: 'Los archivos subidos quedan en una carpeta servida estaticamente.',
+    howWeChecked: [
+      'Verificamos donde se almacenan los uploads',
+      'Esperabamos ruta absoluta fuera de /public, /static',
+      'Estan en una carpeta accesible publicamente',
+    ],
+    whyItMatters: 'Combinacion clasica: upload sin validacion + storage en webroot = RCE.',
+  });
+
   // ===== Capa 1: Config =====
   t.step('Verificar config: STORAGE_PATH fuera del arbol del proyecto');
   const storagePath = process.env.STORAGE_PATH || process.env.UPLOAD_DIR || '';
@@ -116,6 +126,16 @@ it('R62 — file download MUST set Content-Disposition: attachment', async () =>
   t.severity('critical');
   t.tag('Pentest', 'OWASP A03', 'OWASP A05', 'GOES Checklist R62');
 
+  t.remediation({
+    summary: 'Archivos servidos se renderean inline en el browser.',
+    howWeChecked: [
+      'Descargamos un archivo subido',
+      'Esperabamos header Content-Disposition: attachment',
+      'No esta — el browser renderiza inline',
+    ],
+    whyItMatters: 'Sin attachment, un SVG malicioso ejecuta JS con acceso a cookies httpOnly del dominio.',
+  });
+
   // ===== Capa 1: Config =====
   t.step('Verificar config: existe controller/endpoint de descarga');
   const filesControllerSrc = readSrc('../../src/files/files.controller.ts');
@@ -168,6 +188,16 @@ it('PENTEST R62 — SVG upload + download MUST NOT execute scripts on retrieval'
   t.story('SVG con <script> subido y descargado NO se ejecuta en el browser');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A03', 'GOES Checklist R62');
+
+  t.remediation({
+    summary: 'Archivos servidos se renderean inline en el browser.',
+    howWeChecked: [
+      'Descargamos un archivo subido',
+      'Esperabamos header Content-Disposition: attachment',
+      'No esta — el browser renderiza inline',
+    ],
+    whyItMatters: 'Sin attachment, un SVG malicioso ejecuta JS con acceso a cookies httpOnly del dominio.',
+  });
 
   const maliciousSvg = Buffer.from(
     `<?xml version="1.0"?>
@@ -224,6 +254,17 @@ it('PENTEST R63 — PDF with embedded JavaScript MUST be rejected or sanitized',
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A03', 'GOES Checklist R63');
 
+  t.remediation({
+    summary: 'PDFs con JS embebido, Office con macros, XLSX con DDE — todos pasan sin scan.',
+    howWeChecked: [
+      'Subimos PDF con /JavaScript embebido',
+      'Subimos XLSX con formula =cmd|...',
+      'Esperabamos rechazo o sanitizacion',
+      'El sistema acepto todos',
+    ],
+    whyItMatters: 'Archivos validos con payloads internos comprometen al usuario que los abre, el servidor es el vector de distribucion.',
+  });
+
   // PDF minimo con accion JS embebida
   const maliciousPdf = Buffer.from(
     `%PDF-1.4
@@ -262,6 +303,17 @@ it('PENTEST R63 — EICAR test string MUST be rejected by AV scanner', async () 
   t.severity('blocker');
   t.tag('Pentest', 'GOES Checklist R63');
 
+  t.remediation({
+    summary: 'PDFs con JS embebido, Office con macros, XLSX con DDE — todos pasan sin scan.',
+    howWeChecked: [
+      'Subimos PDF con /JavaScript embebido',
+      'Subimos XLSX con formula =cmd|...',
+      'Esperabamos rechazo o sanitizacion',
+      'El sistema acepto todos',
+    ],
+    whyItMatters: 'Archivos validos con payloads internos comprometen al usuario que los abre, el servidor es el vector de distribucion.',
+  });
+
   // EICAR: cadena oficial de prueba de antivirus (NO es un virus real,
   // pero TODO antivirus la detecta como tal)
   const eicar = Buffer.from(
@@ -298,6 +350,17 @@ it('R63 — XLSX with DDE / external formula MUST be rejected or sanitized', asy
   t.story('XLSX con formulas DDE (=cmd|) son rechazadas');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A03', 'GOES Checklist R63');
+
+  t.remediation({
+    summary: 'PDFs con JS embebido, Office con macros, XLSX con DDE — todos pasan sin scan.',
+    howWeChecked: [
+      'Subimos PDF con /JavaScript embebido',
+      'Subimos XLSX con formula =cmd|...',
+      'Esperabamos rechazo o sanitizacion',
+      'El sistema acepto todos',
+    ],
+    whyItMatters: 'Archivos validos con payloads internos comprometen al usuario que los abre, el servidor es el vector de distribucion.',
+  });
 
   // Skeleton: en un test real, construir un .xlsx con openpyxl o exceljs
   // que contenga una celda con `=cmd|'/c calc'!A1` y verificar rechazo.

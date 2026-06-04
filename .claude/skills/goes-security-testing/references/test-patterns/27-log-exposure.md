@@ -31,6 +31,16 @@ it('R10 — production bundle MUST NOT contain console.log statements', async ()
   t.severity('critical');
   t.tag('Pentest', 'OWASP A09', 'GOES Checklist R10');
 
+  t.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
+
   // Buscar todos los .ts del src y verificar que no hay console.log sin comentar
   const srcRoot = path.resolve(__dirname, '../../src');
   const files = glob.sync('**/*.ts', { cwd: srcRoot, absolute: true });
@@ -70,6 +80,16 @@ it('R10 — error responses MUST NOT leak stack traces or internal paths', async
   t.story('Las 5xx no exponen stack, queries, ni rutas absolutas del FS');
   t.severity('critical');
   t.tag('Pentest', 'OWASP A09', 'GOES Checklist R10');
+
+  t.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
 
   // Forzar un error en el service y verificar la response
   const payload = { malformed: true };
@@ -116,6 +136,16 @@ it('R10 — no public debug endpoints (/logs, /debug, /env, /metrics)', async ()
   t.story('Endpoints de debug deshabilitados o protegidos por auth');
   t.severity('critical');
   t.tag('Pentest', 'OWASP A05', 'GOES Checklist R10');
+
+  t.remediation({
+    summary: 'El sistema deja logs visibles al usuario (console.log en frontend bundle, stack traces en errores) que revelan internals.',
+    howWeChecked: [
+      'Inspeccionamos el codigo fuente de src/ por console.log/debug/info',
+      'Verificamos endpoints /logs /debug /env publicamente accesibles',
+      'Forzamos errores para revisar si exponen stack traces',
+    ],
+    whyItMatters: 'Los logs filtrados al cliente revelan la arquitectura interna, paths de archivos, valores de variables, y posibles credenciales hardcoded.',
+  });
 
   const moduleRef = await Test.createTestingModule({}).compile();
   const app = moduleRef.createNestApplication();

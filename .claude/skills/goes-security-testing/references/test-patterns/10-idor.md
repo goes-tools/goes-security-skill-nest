@@ -27,6 +27,16 @@ it('PENTEST: should prevent access to another user resource (IDOR)', async () =>
   await allure.tag('OWASP A01');
   await allure.tag('OWASP API1');
   await allure.tag('GOES Checklist R23');
+
+  allure.remediation({
+    summary: 'Modificar el ID en una URL o body permite acceder a recursos de otros usuarios.',
+    howWeChecked: [
+      'Autenticamos como usuario A',
+      'Modificamos el id en la URL para apuntar a recurso de usuario B',
+      'El sistema devolvio el recurso de B en lugar de 403/404',
+    ],
+    whyItMatters: 'IDOR permite leer/modificar datos de otros usuarios solo cambiando un ID en la URL.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**IDOR (Insecure Direct Object Reference)** — An attacker modifies\n' +
@@ -88,6 +98,16 @@ it('R23 — Resource service methods require a caller identity argument', async 
   t.story('Los metodos del service que acceden a recursos por ID requieren userId del solicitante');
   t.severity('blocker');
   t.tag('Auth', 'OWASP A01', 'OWASP API1', 'GOES Checklist R23');
+
+  t.remediation({
+    summary: 'Modificar el ID en una URL o body permite acceder a recursos de otros usuarios.',
+    howWeChecked: [
+      'Autenticamos como usuario A',
+      'Modificamos el id en la URL para apuntar a recurso de usuario B',
+      'El sistema devolvio el recurso de B en lugar de 403/404',
+    ],
+    whyItMatters: 'IDOR permite leer/modificar datos de otros usuarios solo cambiando un ID en la URL.',
+  });
 
   // Adapt: list every method that accepts a resource ID (id param) and
   // therefore MUST also accept a caller identity to enforce ownership.

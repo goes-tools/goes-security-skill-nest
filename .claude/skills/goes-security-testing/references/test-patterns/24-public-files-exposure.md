@@ -211,6 +211,16 @@ describe('Public Files Exposure — robots.txt, sensitive files, source maps', (
     t.severity('critical');
     t.tag('Pentest', 'OWASP A01', 'GOES Checklist R6');
 
+  t.remediation({
+    summary: 'El sitio publico no tiene robots.txt/sitemap.xml configurados, o estos exponen rutas privadas.',
+    howWeChecked: [
+      'GET /robots.txt y /sitemap.xml',
+      'Esperabamos archivos validos sin exponer rutas internas',
+      'No estan presentes o tienen `Disallow: /admin` que confirma la existencia del admin',
+    ],
+    whyItMatters: 'robots.txt mal configurado revela rutas privadas a buscadores. Si el sitio es interno, no deberia existir o no deberia listar /admin.',
+  });
+
     const robotsPath = path.join(ROOT, 'robots.txt');
     const publicRobots = path.join(ROOT, 'public', 'robots.txt');
     const staticRobots = path.join(ROOT, 'static', 'robots.txt');
@@ -287,6 +297,16 @@ describe('Public Files Exposure — robots.txt, sensitive files, source maps', (
     t.severity('blocker');
     t.tag('Pentest', 'OWASP A05', 'GOES Checklist R3');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
     const publicDirs = ['public', 'static', 'assets', 'www', 'dist/public', 'dist/static'];
     const findings: Finding[] = [];
 
@@ -350,6 +370,16 @@ describe('Public Files Exposure — robots.txt, sensitive files, source maps', (
     t.story('Source maps no se incluyen en el build de produccion');
     t.severity('critical');
     t.tag('Pentest', 'OWASP A05', 'GOES Checklist R3');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
     const distDir = path.join(ROOT, 'dist');
     const findings: Finding[] = [];
@@ -417,6 +447,16 @@ describe('Public Files Exposure — robots.txt, sensitive files, source maps', (
     t.severity('normal');
     t.tag('OWASP A05', 'GOES Checklist R3');
 
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
+
     t.step('Scan project root for debug and backup artifacts');
 
     const dangerousFiles = [
@@ -482,6 +522,16 @@ describe('Public Files Exposure — robots.txt, sensitive files, source maps', (
     t.story('.gitignore incluye patrones para archivos sensibles');
     t.severity('critical');
     t.tag('OWASP A05', 'GOES Checklist R3', 'GOES Checklist R6');
+
+  t.remediation({
+    summary: 'El backend esta exponiendo datos sensibles en la response (DUI, IDs internos, info personal). Esto da material para ataques dirigidos.',
+    howWeChecked: [
+      'Hicimos request al endpoint',
+      'Escaneamos la response buscando patrones sensibles (DUI, CUID, hashes)',
+      'Encontramos campos que no deberian salir al cliente',
+    ],
+    whyItMatters: 'La informacion sensible expuesta puede ser usada para suplantacion de identidad, ataques de ingenieria social o enumeracion masiva del padron.',
+  });
 
     const gitignorePath = path.join(ROOT, '.gitignore');
 

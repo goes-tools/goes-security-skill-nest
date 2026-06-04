@@ -46,6 +46,16 @@ it('PENTEST R11/R55 — export endpoints MUST reject requests without mandatory 
   t.severity('blocker');
   t.tag('Pentest', 'OWASP API4', 'OWASP A04', 'GOES Checklist R11', 'GOES Checklist R55');
   t.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
   t.description = (`
 ## Vulnerability Prevented
 **Mass Data Exfiltration via Export** — VULN-XXX-NNNN reporto que
@@ -118,6 +128,16 @@ it('PENTEST R11 — export DTO MUST declare filters as @IsDefined, NOT @IsOption
   t.tag('Config', 'GOES Checklist R11');
   t.tag('Pentest Regression VULN-XXX-NNNN');
 
+  t.remediation({
+    summary: 'Los DTOs no validan tipos/longitudes correctamente o aceptan campos extras (mass assignment).',
+    howWeChecked: [
+      'Enviamos DTOs con campos extras: isAdmin, role, __proto__',
+      'Esperabamos 400 por forbidNonWhitelisted',
+      'El sistema acepto los campos y los persistio',
+    ],
+    whyItMatters: 'Mass assignment permite escalada de privilegios silenciosa: un usuario normal puede convertirse en admin solo enviando { isAdmin: true } en su perfil.',
+  });
+
   const fs = require('fs');
   const path = require('path');
   const glob = require('glob');
@@ -172,6 +192,16 @@ it('PENTEST R55 — export service MUST apply LIMIT and audit-log every export',
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A09', 'OWASP API4', 'GOES Checklist R55');
   t.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary: 'No hay rate limit o esta mal configurado.',
+    howWeChecked: [
+      'Enviamos 200 requests rapidamente al endpoint',
+      'Esperabamos 429 Too Many Requests despues del limite',
+      'Todos los requests fueron procesados',
+    ],
+    whyItMatters: 'Sin rate limit, un atacante puede hacer brute force de logins o tirar el servicio por DoS.',
+  });
 
   const fs = require('fs');
   const path = require('path');

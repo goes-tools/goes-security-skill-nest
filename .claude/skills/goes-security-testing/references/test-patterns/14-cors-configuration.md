@@ -24,6 +24,16 @@ it('PENTEST: should restrict CORS to allowed origins only (no wildcard)', async 
   await allure.tag('OWASP A05');
   await allure.tag('OWASP API8');
   await allure.tag('GOES Checklist R38');
+
+  allure.remediation({
+    summary: 'CORS acepta origenes no autorizados (localhost, dominios de prueba, *).',
+    howWeChecked: [
+      'Hicimos OPTIONS preflight desde Origin: http://attacker.test',
+      'Esperabamos que Access-Control-Allow-Origin NO incluya ese origen',
+      'El sistema acepto el origen no autorizado',
+    ],
+    whyItMatters: 'CORS permisivo permite ataques de CSRF: un sitio malicioso visitado por el usuario hace requests autenticados a la API.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**CORS Misconfiguration** — Using wildcard (*) allows any website\n' +
@@ -67,6 +77,16 @@ it('should restrict CORS methods to only those needed', async () => {
   await allure.severity('critical');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R39');
+
+  allure.remediation({
+    summary: 'CORS acepta metodos HTTP que la API no usa.',
+    howWeChecked: [
+      'Listamos los metodos realmente usados por la API',
+      'Verificamos Access-Control-Allow-Methods en la response',
+      'Incluye metodos que la API no implementa o usa wildcard',
+    ],
+    whyItMatters: 'Permitir metodos no usados amplia la superficie de ataque innecesariamente.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that CORS only allows the HTTP methods that are actually\n' +
@@ -96,6 +116,16 @@ it('should configure CORS credentials correctly', async () => {
   await allure.tag('Config');
   await allure.tag('GOES Checklist R40');
   await allure.tag('GOES Checklist R41');
+
+  allure.remediation({
+    summary: 'El header se setea en true sin restricion de origenes.',
+    howWeChecked: [
+      'Inspeccionamos la response CORS',
+      'Verificamos si Access-Control-Allow-Credentials esta en true',
+      'Combinado con wildcard o origenes laxos: vulnerable',
+    ],
+    whyItMatters: 'Credentials=true + CORS permisivo = sitio malicioso puede usar las cookies del usuario para hacer requests autenticados.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that Access-Control-Allow-Credentials is only true if\n' +

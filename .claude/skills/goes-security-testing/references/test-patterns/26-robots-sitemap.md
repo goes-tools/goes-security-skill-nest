@@ -24,6 +24,16 @@ it('R6 — public site MUST expose robots.txt with sane defaults', async () => {
   t.severity('minor');
   t.tag('Config', 'GOES Checklist R6');
 
+  t.remediation({
+    summary: 'El sitio publico no tiene robots.txt/sitemap.xml configurados, o estos exponen rutas privadas.',
+    howWeChecked: [
+      'GET /robots.txt y /sitemap.xml',
+      'Esperabamos archivos validos sin exponer rutas internas',
+      'No estan presentes o tienen `Disallow: /admin` que confirma la existencia del admin',
+    ],
+    whyItMatters: 'robots.txt mal configurado revela rutas privadas a buscadores. Si el sitio es interno, no deberia existir o no deberia listar /admin.',
+  });
+
   const moduleRef: TestingModule = await Test.createTestingModule({
     // imports: [AppModule],
   }).compile();
@@ -56,6 +66,16 @@ it('R6 — public site MUST expose sitemap.xml with valid XML', async () => {
   t.story('sitemap.xml es XML valido y solo lista URLs publicas');
   t.severity('minor');
   t.tag('Config', 'GOES Checklist R6');
+
+  t.remediation({
+    summary: 'El sitio publico no tiene robots.txt/sitemap.xml configurados, o estos exponen rutas privadas.',
+    howWeChecked: [
+      'GET /robots.txt y /sitemap.xml',
+      'Esperabamos archivos validos sin exponer rutas internas',
+      'No estan presentes o tienen `Disallow: /admin` que confirma la existencia del admin',
+    ],
+    whyItMatters: 'robots.txt mal configurado revela rutas privadas a buscadores. Si el sitio es interno, no deberia existir o no deberia listar /admin.',
+  });
 
   const moduleRef: TestingModule = await Test.createTestingModule({}).compile();
   const app: INestApplication = moduleRef.createNestApplication();

@@ -23,6 +23,16 @@ it('should prevent duplicate user registration', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R25');
+
+  allure.remediation({
+    summary: 'El sistema permite que un mismo email se registre multiples veces.',
+    howWeChecked: [
+      'Intentamos registrar el mismo email 2 veces',
+      'Esperabamos rechazo con 409 Conflict',
+      'El sistema creo el usuario duplicado',
+    ],
+    whyItMatters: 'Sin chequeo de duplicado, un atacante puede crear cientos de cuentas con el mismo email base, hacer flooding al sistema.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that attempting to register with an existing email\n' +
@@ -57,6 +67,16 @@ it('PENTEST: should reject disposable email addresses', async () => {
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R26');
+
+  allure.remediation({
+    summary: 'El sistema acepta emails desechables (mailinator, tempmail).',
+    howWeChecked: [
+      'Intentamos registrar con dominios de email desechables conocidos',
+      'Esperabamos rechazo',
+      'El sistema acepto el registro',
+    ],
+    whyItMatters: 'Disposable emails permiten al atacante automatizar registros masivos sin posibilidad de auditoria posterior.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Disposable Email Abuse** — Attackers use temporary email services\n' +
@@ -99,6 +119,16 @@ it('should provide secure account recovery flow', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R28');
+
+  allure.remediation({
+    summary: 'No hay flujo seguro de recuperacion: forgot password, recover account.',
+    howWeChecked: [
+      'Buscamos endpoints de forgot/recover password',
+      'Probamos el flujo de recuperacion',
+      'No existe el flujo o el reset token no expira',
+    ],
+    whyItMatters: 'Sin recuperacion segura, usuarios bloqueados quedan inaccesibles.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that the account recovery flow generates a secure,\n' +

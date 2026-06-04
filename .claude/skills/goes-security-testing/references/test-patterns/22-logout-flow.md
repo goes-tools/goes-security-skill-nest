@@ -18,7 +18,28 @@ it('LOGOUT — AuthController.logout is defined, POST, and JWT-guarded', async (
   t.feature('Session Termination');
   t.story('Endpoint POST /auth/logout esta declarado, requiere JWT, y revoca el refresh token');
   t.severity('blocker');
-  t.tag('Auth', 'OWASP A07', 'GOES Checklist R32');
+  t.tag('Auth', 'OWASP A07', 'GOES Checklist R32')
+
+  t.remediation({
+    summary: 'El endpoint /logout no devuelve la respuesta esperada (200 + confirmacion + invalidacion server-side del token).',
+    howWeChecked: [
+      'Hicimos login y capturamos el token',
+      'Llamamos a /api/auth/logout con el token',
+      'Esperabamos 200/204 + token revocado server-side',
+      'El sistema devolvio error o no invalido la sesion',
+    ],
+    whyItMatters: 'Un logout que solo borra el token del cliente deja la sesion activa en el servidor.',
+  });;
+
+  t.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
 
   // Verify the method exists on the controller.
   t.step('Verify: AuthController.logout method is defined');
@@ -64,6 +85,16 @@ it('LOGOUT — service.logout revokes the refresh token in the database', async 
   t.severity('blocker');
   t.tag('Pentest', 'Auth', 'OWASP A07', 'GOES Checklist R32');
 
+  t.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
+
   const refreshToken = 'rt-abc-123';
 
   prisma.refreshToken.findUnique.mockResolvedValue({
@@ -107,6 +138,16 @@ it('LOGOUT — refresh token is unusable after logout', async () => {
   t.story('Despues de logout, intentar usar el mismo refresh token devuelve error');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A07', 'GOES Checklist R32');
+
+  t.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
 
   const refreshToken = 'rt-abc-123';
 

@@ -23,6 +23,16 @@ it('should generate session IDs with sufficient entropy', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R17');
+
+  allure.remediation({
+    summary: 'Los session IDs son predecibles o tienen entropia insuficiente. Un atacante puede adivinarlos por fuerza bruta.',
+    howWeChecked: [
+      'Generamos multiples session IDs',
+      'Esperabamos al menos 128 bits de entropia (22+ caracteres base64)',
+      'Los IDs eran cortos, secuenciales o derivados de informacion conocida',
+    ],
+    whyItMatters: 'Sin entropia suficiente, un atacante puede adivinar session IDs activos y secuestrar sesiones de otros usuarios.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that session IDs are generated with a cryptographically\n' +
@@ -66,6 +76,16 @@ it('PENTEST: should regenerate session after login (prevent session fixation)', 
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R18');
+
+  allure.remediation({
+    summary: 'El session ID no cambia tras login. Un atacante puede fijar un session ID en la victima antes del login y usar el mismo despues.',
+    howWeChecked: [
+      'Capturamos session ID antes del login',
+      'Hicimos login y capturamos el session ID despues',
+      'El session ID es el mismo — vulnerable a session fixation',
+    ],
+    whyItMatters: 'Session fixation permite al atacante secuestrar la sesion sin necesidad de robar el token.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**Session Fixation** — An attacker sets a known session ID\n' +
@@ -111,6 +131,16 @@ it('should expire session after inactivity timeout', async () => {
   await allure.tag('Auth');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R35');
+
+  allure.remediation({
+    summary: 'El sistema no controla el cierre de sesion luego de que el usuario pasa tiempo sin hacer peticiones. La sesion sigue activa aunque el JWT siga vigente.',
+    howWeChecked: [
+      'Hicimos login y capturamos el token (exp lejano)',
+      'Simulamos 31 minutos sin actividad modificando lastActivityAt',
+      'Esperabamos 401 al siguiente request — el sistema devolvio 200',
+    ],
+    whyItMatters: 'Sin idle timeout, un atacante con acceso fisico a una terminal abandonada puede retomar la sesion sin necesidad de la contrasena.',
+  });
   await allure.description(
     '## Objective\n' +
     'Verify that sessions expire after a configurable inactivity period\n' +
@@ -289,6 +319,16 @@ it('PENTEST R13/R35 — refresh token rotation MUST update lastActivityAt', asyn
   await allure.tag('GOES Checklist R32');
   await allure.tag('GOES Checklist R35');
   await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  allure.remediation({
+    summary: 'El refresh token no rota: se puede usar multiples veces antes de su exp.',
+    howWeChecked: [
+      'Usamos el refresh token una vez',
+      'Volvimos a usar el mismo refresh token',
+      'El sistema lo acepto en lugar de rechazarlo (debe ser invalidado tras 1 uso)',
+    ],
+    whyItMatters: 'Sin rotacion, un refresh token filtrado vale por toda su exp.',
+  });
 
   let initialLastActivity: Date;
   let updatedLastActivity: Date;

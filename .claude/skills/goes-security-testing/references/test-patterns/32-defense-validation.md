@@ -69,6 +69,17 @@ it('INV-01 — withOUT helmet, response is missing security headers (control wor
   t.tag('Defense Validation', 'Inverse Test');
   for (const r of ['R44','R45','R46','R47','R48','R49','R50']) t.tag(`GOES Checklist ${r}`);
 
+  t.remediation({
+    summary: 'Test inverso de helmet: verificamos que sin helmet los headers de seguridad realmente desaparecen. Sirve para detectar si una fuente alternativa (LB, CDN) los esta agregando, lo que indicaria que helmet en realidad no esta haciendo nada.',
+    howWeChecked: [
+      'Mockeamos el modulo helmet para que sea no-op',
+      'Levantamos la app con helmet inactivo',
+      'Verificamos que NO esten los headers de seguridad esperados',
+      'Si SIGUEN apareciendo, algo mas los esta agregando — no es helmet',
+    ],
+    whyItMatters: 'Una defensa que no se puede desactivar y seguir viendo el mismo comportamiento es una defensa decorativa o redundante. Este test confirma que helmet hace trabajo real.',
+  });
+
   jest.resetModules();
   jest.doMock('helmet', () => () => (_req: any, _res: any, next: any) => next());
 
@@ -114,6 +125,17 @@ it('INV-02 — withOUT enableCors, OPTIONS preflight has no CORS headers', async
   t.tag('Defense Validation', 'Inverse Test');
   for (const r of ['R38','R39','R40','R41']) t.tag(`GOES Checklist ${r}`);
 
+  t.remediation({
+    summary: 'Test inverso de CORS: verificamos que sin enableCors() en main.ts no hay headers CORS. Si los hay igual, otro middleware o el LB los esta agregando.',
+    howWeChecked: [
+      'Levantamos la app SIN llamar app.enableCors()',
+      'Hicimos OPTIONS preflight desde un origen permitido',
+      'Esperabamos que no haya Access-Control-Allow-Origin',
+      'Si esta presente, hay otro origen que setea CORS — investigar',
+    ],
+    whyItMatters: 'Confirma que enableCors() es la unica fuente de la politica CORS. Cualquier otra fuente puede tener una configuracion distinta y crear bypass silencioso.',
+  });
+
   jest.resetModules();
   // Mockear NestFactory para que ignore enableCors
   // Esto requiere setup mas complejo; alternativa pragmatica:
@@ -155,6 +177,16 @@ it('INV-03 — withOUT JwtAuthGuard, protected endpoint accepts unauthenticated 
   t.severity('blocker');
   t.tag('Defense Validation', 'Inverse Test', 'GOES Checklist R21', 'GOES Checklist R33');
 
+  t.remediation({
+    summary: 'Endpoints privados son accesibles directamente conociendo la URL, sin autenticacion ni redireccion.',
+    howWeChecked: [
+      'Identificamos endpoints privados en el codigo',
+      'Hicimos request sin autenticacion',
+      'El sistema sirvio el contenido en vez de devolver 401/redireccion',
+    ],
+    whyItMatters: 'Forced browsing permite a un atacante saltarse el flujo normal y acceder a paneles administrativos solo conociendo la URL.',
+  });
+
   jest.resetModules();
   jest.doMock('../../../src/auth/jwt-auth.guard', () => ({
     JwtAuthGuard: class {
@@ -194,6 +226,16 @@ it('INV-04 — withOUT ValidationPipe global, malformed DTOs are accepted', asyn
   t.severity('blocker');
   t.tag('Defense Validation', 'Inverse Test', 'GOES Checklist R5', 'GOES Checklist R11');
 
+  t.remediation({
+    summary: 'El sistema no esta sanitizando inputs antes de almacenarlos o reflejarlos. Un atacante puede inyectar scripts maliciosos via campos de texto.',
+    howWeChecked: [
+      'Enviamos payloads XSS clasicos: <script>, <img onerror>, <svg onload>',
+      'Esperabamos que el sistema rechace, escape o sanitice',
+      'El payload llego intacto al storage o se reflejo en la response',
+    ],
+    whyItMatters: 'XSS permite robar sesiones de otros usuarios, ejecutar acciones en su nombre, capturar credenciales, o defacement del sitio.',
+  });
+
   // Levantar app sin useGlobalPipes
   const { AppModule } = await import('../../../src/app.module');
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -226,6 +268,16 @@ it('INV-05 — withOUT HttpExceptionFilter, errors leak raw exception data', asy
   t.story('HttpExceptionFilter hace trabajo real: sin el, errores leak detalles');
   t.severity('blocker');
   t.tag('Defense Validation', 'Inverse Test', 'GOES Checklist R8');
+
+  t.remediation({
+    summary: 'Las respuestas de error exponen detalles tecnicos (rutas, stack traces, queries SQL) que dan reconocimiento al atacante.',
+    howWeChecked: [
+      'Forzamos un error en el endpoint con un payload invalido',
+      'Esperabamos un body con solo {statusCode, message}',
+      'El sistema devolvio path, timestamp, stack trace o query SQL',
+    ],
+    whyItMatters: 'Los detalles del error facilitan la enumeracion de la API y la identificacion del stack tecnologico.',
+  });
 
   const { AppModule } = await import('../../../src/app.module');
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -267,6 +319,16 @@ it('INV-06 — withOUT ThrottlerGuard, 200 requests/min are accepted on /login',
   t.story('ThrottlerGuard hace trabajo real: sin el, no hay 429');
   t.severity('blocker');
   t.tag('Defense Validation', 'Inverse Test', 'GOES Checklist R55');
+
+  t.remediation({
+    summary: 'No hay rate limit o esta mal configurado.',
+    howWeChecked: [
+      'Enviamos 200 requests rapidamente al endpoint',
+      'Esperabamos 429 Too Many Requests despues del limite',
+      'Todos los requests fueron procesados',
+    ],
+    whyItMatters: 'Sin rate limit, un atacante puede hacer brute force de logins o tirar el servicio por DoS.',
+  });
 
   jest.resetModules();
   jest.doMock('@nestjs/throttler', () => {

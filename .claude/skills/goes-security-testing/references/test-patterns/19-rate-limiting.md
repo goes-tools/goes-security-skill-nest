@@ -35,6 +35,16 @@ it('PENTEST: should reject requests that exceed the rate limit', async () => {
   await allure.tag('OWASP A04');
   await allure.tag('OWASP API4');
   await allure.tag('GOES Checklist R55');
+
+  allure.remediation({
+    summary: 'No hay rate limit o esta mal configurado.',
+    howWeChecked: [
+      'Enviamos 200 requests rapidamente al endpoint',
+      'Esperabamos 429 Too Many Requests despues del limite',
+      'Todos los requests fueron procesados',
+    ],
+    whyItMatters: 'Sin rate limit, un atacante puede hacer brute force de logins o tirar el servicio por DoS.',
+  });
   await allure.description(
     '## Vulnerability Prevented\n' +
     '**DoS / Brute Force** — An attacker sends thousands of requests\n' +
@@ -93,6 +103,16 @@ it('R55 — @Throttle decorator is applied on login and register', async () => {
   t.severity('blocker');
   t.tag('Auth', 'OWASP API2', 'GOES Checklist R55');
 
+  t.remediation({
+    summary: 'No hay rate limit o esta mal configurado.',
+    howWeChecked: [
+      'Enviamos 200 requests rapidamente al endpoint',
+      'Esperabamos 429 Too Many Requests despues del limite',
+      'Todos los requests fueron procesados',
+    ],
+    whyItMatters: 'Sin rate limit, un atacante puede hacer brute force de logins o tirar el servicio por DoS.',
+  });
+
   // Read the throttler metadata from the controller methods themselves.
   // Adapt the metadata key to your throttler library:
   //   - @nestjs/throttler v5+: 'THROTTLER:LIMIT' / 'throttler:options'
@@ -130,6 +150,16 @@ it('R55 — Login endpoint returns 429 after 5 attempts in 60s', async () => {
   t.story('Sexta request al login en menos de 60s devuelve 429');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A04', 'OWASP API4', 'GOES Checklist R55');
+
+  t.remediation({
+    summary: 'No hay rate limit o esta mal configurado.',
+    howWeChecked: [
+      'Enviamos 200 requests rapidamente al endpoint',
+      'Esperabamos 429 Too Many Requests despues del limite',
+      'Todos los requests fueron procesados',
+    ],
+    whyItMatters: 'Sin rate limit, un atacante puede hacer brute force de logins o tirar el servicio por DoS.',
+  });
 
   t.evidence('Attack scenario (input)', {
     endpoint: '/auth/login',
