@@ -131,6 +131,9 @@ class SecurityHtmlReporter {
   }
 
   // ─── Vitest adapter ───────────────────────────────────────────────────────
+  // Vitest ≤3 llama onInit + onFinished(files). Vitest 4 removió onFinished y usa
+  // onTestRunEnd(testModules) con la API "Reported Tasks". Soportamos ambas; el
+  // guard _vitestRendered evita doble render si una versión disparara las dos.
   onInit(ctx) {
     try {
       const cfg = (ctx && ctx.config) || {};
@@ -140,7 +143,71 @@ class SecurityHtmlReporter {
     }
   }
 
+  // Vitest 4+ (API "Reported Tasks"): onTestRunEnd(testModules, errors, reason).
+  async onTestRunEnd(testModules, _errors, _reason) {
+    if (this._vitestRendered) return;
+    this._vitestRendered = true;
+    const normalizedTests = [];
+    let durationMs = 0;
+    for (const mod of testModules || []) {
+      const filepath = (mod && mod.moduleId) || '';
+      let tests = [];
+      try {
+        tests = mod.children ? Array.from(mod.children.allTests()) : [];
+      } catch (e) {
+        tests = [];
+      }
+      for (const tc of tests) {
+        const res = (tc.result && tc.result()) || {};
+        const diag = (tc.diagnostic && tc.diagnostic()) || {};
+        const dur = diag.duration || 0;
+        durationMs += dur;
+        // Reported Tasks usa estados 'passed' | 'failed' | 'skipped' | 'pending'.
+        const status =
+          res.state === 'passed' ? 'passed' : res.state === 'failed' ? 'failed' : 'skipped';
+        normalizedTests.push({
+          testFilePath: filepath,
+          title: tc.name,
+          fullName: tc.fullName,
+          status,
+          duration: dur,
+          failureMessages: (res.errors || []).map((e) =>
+            !e ? String(e) : (e.stack || e.message || String(e)),
+          ),
+        });
+      }
+      // Módulo que falló a colección (sin tests pero con errores) → rojo.
+      if (tests.length === 0) {
+        let modErrors = [];
+        try {
+          modErrors = (mod.errors && mod.errors()) || [];
+        } catch (e) {
+          modErrors = [];
+        }
+        if (modErrors.length) {
+          normalizedTests.push({
+            testFilePath: filepath,
+            title: '(archivo de test no se pudo cargar)',
+            fullName: '(archivo de test no se pudo cargar)',
+            status: 'failed',
+            duration: 0,
+            failureMessages: modErrors.map((e) =>
+              !e ? String(e) : (e.stack || e.message || String(e)),
+            ),
+          });
+        }
+      }
+    }
+    await this.renderReport(normalizedTests, {
+      rootDir: this.rootDir || process.cwd(),
+      durationMs,
+      suites: (testModules || []).length,
+    });
+  }
+
   async onFinished(files, _errors) {
+    if (this._vitestRendered) return;
+    this._vitestRendered = true;
     const normalizedTests = [];
     let durationMs = 0;
     for (const file of files || []) {
@@ -385,8 +452,40 @@ class SecurityHtmlReporter {
     return Math.random().toString(36).substring(2, 11);
   }
 
+  // Cobertura del checklist GOES para el CI gate (job checklist-coverage y el
+  // resumen del PR leen window.__GOES_STATS__ del HTML). Un item está "cubierto"
+  // si tiene >=1 test real (pass/fail) tagueado `GOES Checklist Rxx`; "na" si
+  // todos sus tests son notApplicable; "missing" si no tiene ningún test.
+  computeGoesStats(tests) {
+    const items = [];
+    for (let n = 3; n <= 63; n++) {
+      if ([7, 12, 36, 56].includes(n)) continue; // gaps de numeración
+      items.push('R' + n);
+    }
+    let covered = 0;
+    let na = 0;
+    let missing = 0;
+    for (const r of items) {
+      const tag = 'GOES Checklist ' + r;
+      const matched = (tests || []).filter((t) =>
+        (t.tags || []).some((tg) => String(tg).trim() === tag),
+      );
+      if (matched.length === 0) {
+        missing++;
+      } else if (matched.some((t) => !t.naReason && (t.status === 'passed' || t.status === 'failed'))) {
+        covered++;
+      } else {
+        na++;
+      }
+    }
+    return { totalChecklistItems: items.length, covered, na, missing };
+  }
+
   generateHtml(reportData) {
     const dataJson = JSON.stringify(reportData).replace(/</g, '\\x3c').replace(/>/g, '\\x3e');
+    // Objeto PLANO (sin llaves anidadas): el gate lo extrae con
+    // /window\.__GOES_STATS__\s*=\s*(\{[^}]+\})/. No anidar.
+    const statsJson = JSON.stringify(this.computeGoesStats(reportData.tests));
     const escapedTitle = String(reportData.meta.title || 'Security Test Report')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -2241,6 +2340,7 @@ class SecurityHtmlReporter {
 
   <script>
     const DATA = ${dataJson};
+    window.__GOES_STATS__ = ${statsJson};
 
     let currentFilter = 'all';
     let filteredTests = DATA.tests;

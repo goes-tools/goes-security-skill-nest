@@ -192,11 +192,19 @@ let gateProblems: string[] = [];
 const GATE_PATH = '.github/workflows/security-gate.yml';
 if (exists(GATE_PATH)) {
   const gateContent = read(GATE_PATH);
-  // Buscar continue-on-error: true (con flexibilidad de espacios)
-  if (/continue-on-error\s*:\s*true/i.test(gateContent)) {
+  // "comentario = ausente": el propio gate menciona estos tokens en comentarios
+  // y mensajes echo del job verify-gate-integrity. Evaluamos los regex de bypass
+  // sobre el YAML SIN comentarios (#...) ni líneas de echo, para no dar
+  // falso-FAIL por autoreferencia.
+  const gateScannable = gateContent
+    .split('\n')
+    .map((l) => l.replace(/#.*$/, ''))
+    .filter((l) => !/echo\s+["']/.test(l))
+    .join('\n');
+  if (/continue-on-error\s*:\s*true/i.test(gateScannable)) {
     gateProblems.push('continue-on-error: true detectado — gate puede ser bypaseado');
   }
-  if (/if\s*:\s*false/i.test(gateContent)) {
+  if (/if\s*:\s*false/i.test(gateScannable)) {
     gateProblems.push('if: false detectado — algun step esta deshabilitado');
   }
   // Jobs canonicos

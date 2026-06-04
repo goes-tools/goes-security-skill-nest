@@ -150,6 +150,60 @@ async function run() {
   check('evidencia presente', vh.includes('403'));
   check('archivo roto aparece como fallo', vh.includes('no se pudo cargar') && vh.includes('SyntaxError: bad import'));
 
+  // ── Caso Vitest 4 (onTestRunEnd / Reported Tasks) ───────────────────────────
+  const metaDir4 = path.join(tmpRoot, 'meta-v4');
+  fs.mkdirSync(metaDir4, { recursive: true });
+  process.env.SECURITY_REPORTER_TEMP_DIR = metaDir4;
+  fs.writeFileSync(
+    path.join(metaDir4, 'meta-1.json'),
+    JSON.stringify({
+      testName: 'AuthService > rechaza CSRF',
+      testPath: path.join(tmpRoot, 'v4.security-html.spec.ts'),
+      epic: 'Seguridad',
+      feature: 'Cookie Security Flags',
+      tags: ['GOES Checklist R42'],
+      evidences: [
+        { name: 'Request (input)', data: { cookie: 'x' } },
+        { name: 'Response (output)', data: { sameSite: 'Strict' } },
+      ],
+    }),
+  );
+
+  const makeTC = (name, fullName, state) => ({
+    name,
+    fullName,
+    result: () => ({ state, errors: [] }),
+    diagnostic: () => ({ duration: 2 }),
+  });
+  const v4Out = path.join(tmpRoot, 'vitest4.html');
+  const v4 = new Reporter({ outputPath: v4Out });
+  v4.onInit({ config: { root: tmpRoot } });
+  await v4.onTestRunEnd([
+    {
+      moduleId: path.join(tmpRoot, 'v4.security-html.spec.ts'),
+      children: {
+        *allTests() {
+          yield makeTC('rechaza CSRF', 'AuthService > rechaza CSRF', 'passed');
+        },
+      },
+    },
+  ]);
+  const v4h = readReport(v4Out);
+  console.log('Vitest 4 (onTestRunEnd):');
+  check('render contiene el test', v4h.includes('rechaza CSRF'));
+  check('metadata cruzó (feature presente)', v4h.includes('Cookie Security Flags'));
+  const statsMatch = v4h.match(/window\.__GOES_STATS__\s*=\s*(\{[^}]+\})/);
+  let statsOk = false;
+  if (statsMatch) {
+    try {
+      const s = JSON.parse(statsMatch[1]);
+      statsOk = s.totalChecklistItems === 57 && s.covered === 1 && s.missing === 56;
+    } catch (e) {
+      statsOk = false;
+    }
+  }
+  check('__GOES_STATS__ presente, plano y correcto (covered=1)', statsOk);
+
   // ── Limpieza ──────────────────────────────────────────────────────────────
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 

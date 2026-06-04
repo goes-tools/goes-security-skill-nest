@@ -6,7 +6,8 @@
 
 El reporter HTML es un **único reporter universal** (`reporter/html-reporter.js`):
 una sola clase que funciona como reporter de Jest (`onRunComplete`) y de Vitest
-(`onInit`/`onFinished`), delegando en el mismo core `renderReport()`. Cada runner
+(`onInit` + `onTestRunEnd` en Vitest 4 / `onFinished` en ≤3), delegando en el
+mismo core `renderReport()`. Cada runner
 referencia el MISMO archivo; solo cambia cómo lo instancia (Jest pasa
 `(globalConfig, options)`, Vitest pasa `(options)` — el constructor lo detecta).
 La suite de seguridad SIEMPRE usa un **config aislado y propio**
@@ -79,17 +80,21 @@ runner, verificar su versión (major) contra esta matriz:
 |------------|----------------|
 | Node | ≥ 18 |
 | Jest | 28 – 30 |
-| Vitest | 1 – 3 |
+| Vitest | 1 – 4 |
 | TypeScript | ≥ 4.7 |
 | ts-jest | acorde a la versión de Jest |
+
+> El reporter soporta ambas APIs de Vitest: `onFinished` (≤3) y `onTestRunEnd`
+> (4, "Reported Tasks"). Si Vitest publica una API nueva en un major futuro, ese
+> major queda fuera de rango hasta validarlo.
 
 **Dentro del rango:** continuar sin avisos (ver "reportar solo el trabajo
 concreto" en SKILL.md).
 
-**FUERA del rango** (ej. Vitest 4, Jest 27, Node 16):
+**FUERA del rango** (ej. Vitest 5, Jest 27, Node 16):
 
 1. **Notificar** concreto: qué componente, qué versión y por qué no está validada
-   (ej. *"Vitest 4 removió `onFinished`; el reporter está validado hasta Vitest 3"*).
+   (ej. *"Jest 27 no está validado; el reporter se probó en Jest 28–30"*).
 2. **Proponer** una versión compatible, que puede vivir **acotada a la suite de
    seguridad** (devDep pinneada en su config aislado o entorno aparte), sin tocar
    lo que el proyecto ya usa.
@@ -118,7 +123,7 @@ en tests, Vitest ya lo hace vía Vite/esbuild — no se necesita `ts-jest`.
 import { defineConfig } from 'vitest/config';
 import * as path from 'path';
 // @ts-expect-error — reporter universal en CJS, sin tipos. El MISMO archivo que
-// usa Jest; aquí se instancia con (options) y Vitest llama onInit/onFinished.
+// usa Jest; aquí se instancia con (options) y Vitest llama onInit + onTestRunEnd (v4) / onFinished (≤3).
 import SecurityHtmlReporter from '../../.claude/skills/goes-security-testing/reporter/html-reporter.js';
 
 const reporterDir = path.resolve(__dirname, '../../.claude/skills/goes-security-testing/reporter');
@@ -154,6 +159,12 @@ Notas:
 - El alias `@security-reporter` permite `import { report } from '@security-reporter/metadata'`.
 - Si el proyecto es ESM puro y el config debe ser `.mts`, usar `import` igual;
   el reporter CJS se carga vía interop de Vite sin cambios.
+- **`"type": "module"` (o `tsconfig` con `module: nodenext`):** `__dirname` no
+  existe. Reemplazar por:
+  ```typescript
+  import { fileURLToPath } from 'node:url';
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  ```
 
 ### A.2b `test/security/security.setup.ts` (specs idénticos en ambos runners)
 
@@ -176,12 +187,18 @@ directamente. El shim es lo que mantiene los specs **portables** entre proyectos
 
 ```jsonc
 {
-  "test:security:html": "vitest run --config test/security/security.config.ts"
+  "test:security:html": "vitest run --config test/security/security.config.ts",
+  "test:security:release": "vitest run --config test/security/security-release.config.ts"
 }
 ```
 
 `test:all` (omitir e2e si no existe): `npm test && npm run test:security:html`
 (pnpm/yarn: reemplazar `npm run` por `pnpm`/`yarn`).
+
+> `test:security:release` lo invoca el gate y lo lista el doctor (recomendado).
+> El config de release es el mismo de A.2 apuntando a un `include` de release y
+> leyendo `SECURITY_TEST_BASE_URL` (corre contra el ambiente desplegado). Mismo
+> reporter universal `html-reporter.js`.
 
 ---
 
@@ -226,11 +243,24 @@ const config: Config = {
 export default config;
 ```
 
+> **Proyectos TS modernos (`tsconfig` con `module: nodenext` o `"type":"module"`):**
+> - El config `.ts` falla con `__dirname is not defined in ES module scope`.
+>   Usar `process.cwd()` (apuntando a la raíz del proyecto) en vez de `__dirname`,
+>   o el patrón `fileURLToPath(import.meta.url)` (ver Notas de A.2).
+> - `ts-jest` no puede cargar módulos ESM/nodenext por defecto: pasarle un
+>   override a CommonJS en el transform:
+>   ```typescript
+>   transform: {
+>     '^.+\\.(t|j)s$': ['ts-jest', { tsconfig: { module: 'CommonJS' } }],
+>   },
+>   ```
+
 ### B.3 Scripts
 
 ```jsonc
 {
-  "test:security:html": "jest --config test/security/security.config.ts --verbose"
+  "test:security:html": "jest --config test/security/security.config.ts --verbose",
+  "test:security:release": "jest --config test/security/security-release.config.ts --verbose"
 }
 ```
 

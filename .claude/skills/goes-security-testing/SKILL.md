@@ -33,6 +33,11 @@ Este SKILL.md es el índice del flujo. El detalle vive en `references/` y se lee
 No copies estos archivos al proyecto salvo donde se indique (templates/examples).
 El reporter se **referencia** desde `.claude/skills/.../reporter/`, no se duplica.
 
+> **Ruta canónica:** la skill DEBE vivir en `.claude/skills/goes-security-testing/`.
+> Los configs y el doctor resuelven rutas relativas a esa ruta (el reporter, el
+> `pentest-history.yaml`, etc.). Si la skill llegó a otra ubicación (ej.
+> `.claude/goes-security-testing/`), moverla a la canónica ANTES de continuar.
+
 ---
 
 ## Permisos: agilizar la ejecución sin decidir por el usuario
@@ -139,7 +144,8 @@ allure-jest, jest-html-reporters ni Java.
 El reporter viene bundled en `.claude/skills/goes-security-testing/reporter/`:
 
 - `reporter/html-reporter.js` — **reporter universal**: una sola clase que actúa
-  como reporter de Jest (`onRunComplete`) y de Vitest (`onInit`/`onFinished`),
+  como reporter de Jest (`onRunComplete`) y de Vitest (`onInit` + `onTestRunEnd`
+  en v4 / `onFinished` en ≤3),
   con un core compartido `renderReport`. Jest y Vitest referencian el MISMO
   archivo; solo difiere cómo lo instancia cada config (ver `runner-setup.md`).
 - `reporter/metadata.ts` — collector: `report()` y `AllureCompat`; cada test
@@ -322,7 +328,8 @@ Categorías: 1 Contenido Web (R3-R6) · 2 I/O servidor (R8-R11) · 3 Auth/regist
 9. **Cada test termina con `await t.flush()`**.
 10. **El reporter es JS puro y universal** — no convertir `html-reporter.js` a TS.
     Una sola clase sirve a Jest y Vitest. Si necesitás tocar la ingesta de un
-    runner, hacelo en su hook (`onRunComplete` Jest / `onFinished` Vitest); el
+    runner, hacelo en su hook (`onRunComplete` Jest / `onTestRunEnd`+`onFinished`
+    Vitest); el
     core `renderReport` es compartido — no lo dupliques.
 11. **Specs terminan en `.security-html.spec.ts`** (patrón que buscan ambos configs).
 12. **≥1 par input+output en `t.evidence(...)`** por test.
