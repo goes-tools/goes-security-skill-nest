@@ -5,9 +5,9 @@
 **Covers:** R3 (Sensitive Data Exposure aplicado a responses API), R4 (Business Logic Exposure), R11 (DTO Output Validation), R20 (No sensitive data in JWT payload), OWASP API3 (Broken Object Property Authorization)
 
 **Regresiones cubiertas:**
-- **VULN-INT-0002** — `/api/auth/me` retorna lista completa de roles + permisos con IDs internos numericos
-- **VULN-EXT-0002** — `/api/auth/me` retorna DUI completo en cada carga del dashboard
-- **VULN-EXT-0006** — Endpoints retornan CUID de Prisma (`cmpn5ugw3000bs601v41rgyic`) revelando stack
+- **VULN-XXX-NNNN** — `/api/auth/me` retorna lista completa de roles + permisos con IDs internos numericos
+- **VULN-XXX-NNNN** — `/api/auth/me` retorna DUI completo en cada carga del dashboard
+- **VULN-XXX-NNNN** — Endpoints retornan CUID de Prisma (`cmpn5ugw3000bs601v41rgyic`) revelando stack
 
 ---
 
@@ -94,7 +94,7 @@ it('PENTEST R3 — GET /api/auth/me MUST NOT leak DUI, internal IDs, permissions
   t.story('Response DTO de /api/auth/me es minimo y enmascarado');
   t.severity('critical');
   t.tag('Pentest', 'OWASP A02', 'OWASP API3', 'GOES Checklist R3', 'GOES Checklist R4');
-  t.tag('Pentest Regression VULN-INT-0002', 'Pentest Regression VULN-EXT-0002', 'Pentest Regression VULN-EXT-0006');
+  t.tag('Pentest Regression VULN-XXX-NNNN', 'Pentest Regression VULN-XXX-NNNN', 'Pentest Regression VULN-XXX-NNNN');
 
   // Login + GET /me (ajustar credenciales segun el proyecto)
   const loginRes = await request(app.getHttpServer())
@@ -150,7 +150,7 @@ it('PENTEST R3 — list endpoints (GET /users, /permits) MUST NOT leak internal 
   t.story('Endpoints de listado retornan IDs opacos publicos, no CUIDs de Prisma');
   t.severity('critical');
   t.tag('Pentest', 'OWASP API1', 'GOES Checklist R3');
-  t.tag('Pentest Regression VULN-EXT-0006');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   // Ajustar a las rutas reales del proyecto
   const candidateEndpoints = [

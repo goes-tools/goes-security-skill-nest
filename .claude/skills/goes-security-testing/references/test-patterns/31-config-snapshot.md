@@ -22,7 +22,7 @@ El snapshot vive en el proyecto bajo test:
         └── *.security-html.spec.ts
 ```
 
-El snapshot es un JSON declarativo con los valores esperados. El test E2E levanta la app, captura los valores reales y los compara byte-a-byte. La unica forma de cambiar el snapshot es un PR explicito que ciberseguridad debe aprobar (`CODEOWNERS` de `test/security/security.snapshot.json` = `@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev`).
+El snapshot es un JSON declarativo con los valores esperados. El test E2E levanta la app, captura los valores reales y los compara byte-a-byte. La unica forma de cambiar el snapshot es un PR explicito que ciberseguridad debe aprobar (`CODEOWNERS` de `test/security/security.snapshot.json` = `@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev`).
 
 ---
 
@@ -33,7 +33,7 @@ El snapshot es un JSON declarativo con los valores esperados. El test E2E levant
   "$schema": "https://goes.gob.sv/security-snapshot.v1.json",
   "version": 1,
   "project": "emprendedores-release-interno",
-  "approved_by": "@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev",
+  "approved_by": "@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev",
   "approved_at": "2026-05-28",
 
   "headers": {
@@ -260,7 +260,7 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
     t.feature('Runtime Configuration Snapshot');
     t.story('Error responses retornan solo las keys aprobadas');
     t.severity('critical');
-    t.tag('Config', 'GOES Checklist R8', 'Pentest Regression VULN-EXT-0013');
+    t.tag('Config', 'GOES Checklist R8', 'Pentest Regression VULN-XXX-NNNN');
 
     const res = await http()
       .post('/api/auth/login')
@@ -320,7 +320,7 @@ describe('Pattern 31 — Configuration Snapshot (drift detection)', () => {
 # aprueba.
 npm run test:security:snapshot:update
 git diff test/security/security.snapshot.json
-# CODEOWNERS de ese archivo = @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev
+# CODEOWNERS de ese archivo = @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev
 ```
 
 El comando `test:security:snapshot:update` (lo agrega la skill al `package.json`) corre un script que:
@@ -337,7 +337,7 @@ El comando `test:security:snapshot:update` (lo agrega la skill al `package.json`
 ## Como se cambia el snapshot
 
 1. Cualquier modificacion al snapshot DEBE ir en un PR separado del codigo.
-2. El PR es revisado por `@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev` (via CODEOWNERS).
+2. El PR es revisado por `@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev` (via CODEOWNERS).
 3. Una vez merged, el snapshot es la nueva fuente de verdad.
 
 Esto convierte cambios de seguridad en decisiones explicitas y trazables.

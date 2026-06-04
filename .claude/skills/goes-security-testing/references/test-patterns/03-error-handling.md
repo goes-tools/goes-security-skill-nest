@@ -10,7 +10,7 @@
 >   reaches the reporter.
 > - `attach(name, data)` is now async — call it as `await attach(...)`.
 
-**Covers:** R6 (Public Site Config), R8 (Generic Error Messages — incluye prohibicion de `path`/`timestamp`/`stack` en body, regresion VULN-EXT-0013), R22 (Unknown Route Handling)
+**Covers:** R6 (Public Site Config), R8 (Generic Error Messages — incluye prohibicion de `path`/`timestamp`/`stack` en body, regresion VULN-XXX-NNNN), R22 (Unknown Route Handling)
 
 ```typescript
 it('should return generic error messages without exposing internals', async () => {
@@ -111,10 +111,47 @@ it('PENTEST R8 — error body MUST NOT contain path, timestamp, or internal fiel
   await allure.tag('OWASP A05');
   await allure.tag('OWASP A09');
   await allure.tag('GOES Checklist R8');
-  await allure.tag('Pentest Regression VULN-EXT-0013');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary:
+      'El backend esta enviando informacion extra en los mensajes de error que un atacante ' +
+      'puede usar para mapear la API y planear ataques mas dirigidos.',
+    howWeChecked: [
+      'Forzamos un error enviando un payload invalido a POST /api/auth/login',
+      'Esperabamos que el body de la response fuera exclusivamente { statusCode, message }',
+      'Encontramos tambien los campos `path` (la ruta interna) y `timestamp` con precision de milisegundos',
+    ],
+    whyItMatters:
+      'El campo `path` deja ver rutas internas de la API que un atacante puede enumerar sin ' +
+      'tener que adivinarlas. El `timestamp` con milisegundos habilita ataques de temporizacion ' +
+      'para inferir si una cuenta existe o que tan lenta es una operacion sensible.',
+    file: 'src/common/filters/http-exception.filter.ts (o equivalente)',
+    symbol: 'catch(exception, host)',
+    expected: 'response.json({ statusCode, message })',
+    received: 'response.json({ statusCode, message, path: request.url, timestamp: new Date().toISOString() })',
+    howToFix:
+      '1. Abrir el archivo del exception filter global registrado en main.ts.\n' +
+      '2. Quitar `path` y `timestamp` del objeto que se envia con response.json().\n' +
+      '3. Mantener esos campos solo en el this.logger.log/error del servidor.\n' +
+      '4. La response al cliente debe ser exclusivamente { statusCode, message } (y opcionalmente `error` con un slug generico).',
+    exampleCode:
+      'response.status(status).json({\n' +
+      '  statusCode: status,\n' +
+      '  message: exception instanceof HttpException\n' +
+      '    ? exception.message\n' +
+      '    : \'Ha ocurrido un error. Intente de nuevo mas tarde.\',\n' +
+      '});',
+    references: [
+      { title: 'GOES Guide Seccion 9.1 — Secure Errors' },
+      { title: 'OWASP A09 Security Logging Failures', url: 'https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/' },
+      { title: 'NestJS Exception filters', url: 'https://docs.nestjs.com/exception-filters' },
+    ],
+  });
+
   await allure.description(
     '## Vulnerability Prevented\n' +
-    '**Information Disclosure via Error Payload** — VULN-EXT-0013 del pentest\n' +
+    '**Information Disclosure via Error Payload** — VULN-XXX-NNNN del pentest\n' +
     'del 27/05/2026 reporto que /api respondia con\n' +
     '`{"statusCode":400,"message":"...","timestamp":"2026-05-26T12:41:08.569Z",\n' +
     '"path":"/api/auth/login"}`. El campo `path` permite enumerar endpoints,\n' +
@@ -191,7 +228,7 @@ it('R8 config — HttpExceptionFilter MUST be registered globally and not leak r
   await allure.severity('blocker');
   await allure.tag('Config');
   await allure.tag('GOES Checklist R8');
-  await allure.tag('Pentest Regression VULN-EXT-0013');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
 
   const fs = require('fs');
   const path = require('path');

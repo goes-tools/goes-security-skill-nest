@@ -10,16 +10,14 @@
 
 ```
 test/security/regression/
-├── VULN-INT-0002.regression.spec.ts
-├── VULN-INT-0004.regression.spec.ts
-├── VULN-INT-0009.regression.spec.ts
-├── VULN-EXT-0002.regression.spec.ts
-├── VULN-EXT-0003.regression.spec.ts
-├── VULN-EXT-0005.regression.spec.ts
-├── VULN-EXT-0006.regression.spec.ts
-├── VULN-EXT-0011.regression.spec.ts
-└── VULN-EXT-0013.regression.spec.ts
+├── VULN-XXX-0001.regression.spec.ts   ← un archivo por VULN-ID del proyecto
+├── VULN-XXX-0002.regression.spec.ts
+└── VULN-XXX-NNNN.regression.spec.ts
 ```
+
+> Cada proyecto define su prefijo (`VULN-INT-`, `VULN-EXT-`, `VULN-`, etc.)
+> y numeracion. La skill no impone el formato — solo que cada entrada del
+> `pentest-history.yaml` del proyecto tenga su spec correspondiente.
 
 Un archivo = un VULN-ID. Un solo `it()` por archivo. Sin excepciones.
 
@@ -134,9 +132,56 @@ Esta es la tabla canonica. Toda entrada del YAML usa estas claves y se traduce m
 | `session_must_be_revoked_in_db: true` | requiere acceso al repositorio de sesiones — ver setup `e2e_request_with_clock_skew` |
 | `body_not_contains_fields_in_path: ["a.b[*].c"]` | iterar el JSONPath con lodash + assert que cada match no existe |
 
+## OBLIGATORIO: declarar `remediation` para que el modal sea util
+
+Sin `t.remediation({...})`, cuando un dev abre el modal del test rojo en el reporte solo ve el stack trace crudo de Jest. Con remediation, ve **exactamente** que archivo abrir y como arreglarlo.
+
+```typescript
+t.remediation({
+  file: 'src/admin-reports/admin-reports.service.ts',
+  line: 42,
+  symbol: 'generateReport()',
+  expected: 'prisma.$queryRaw`SELECT * FROM permits WHERE department_id = ${id}` (template tag, parametrizado)',
+  received: 'prisma.$queryRawUnsafe(`SELECT * FROM permits WHERE department_id = ${id}`) (string raw)',
+  howToFix:
+    'Reemplazar $queryRawUnsafe por $queryRaw con template tag.\n' +
+    'El template tag de Prisma parametriza automaticamente las variables,\n' +
+    'evitando SQL injection. Si el id viene del request, validarlo como\n' +
+    'UUID/integer ANTES de pasarlo a Prisma.',
+  exampleCode:
+    'const result = await prisma.$queryRaw`\n' +
+    '  SELECT * FROM permits WHERE department_id = ${departmentId}\n' +
+    '`;',
+  references: [
+    { title: 'Prisma docs — Raw queries', url: 'https://www.prisma.io/docs/concepts/components/prisma-client/raw-database-access' },
+    { title: 'OWASP A03 Injection', url: 'https://owasp.org/Top10/A03_2021-Injection/' },
+    { title: 'GOES Guide Section 7 — Database Security' },
+  ],
+});
+```
+
+El modal renderiza esto como un bloque destacado en naranja arriba de todo, con:
+- 📁 path + linea + simbolo
+- Cell verde (✓ Esperado) + cell roja (✗ Encontrado) side by side
+- Bloque verde con los pasos exactos para arreglarlo
+- Snippet de codigo correcto
+- Lista de referencias clickeables
+
+**Reglas para escribir remediation**:
+
+- `file` y `line` cuando el test detecte un problema en un archivo especifico (via grep/AST). Si el test es comportamiento E2E sin un archivo concreto, omitir.
+- `expected` y `received` cortos (1-3 lineas cada uno). Si son largos, ponerlos en `howToFix`.
+- `howToFix` en formato imperativo (Reemplazar, Agregar, Quitar). Hasta 5-6 lineas.
+- `exampleCode` con el snippet exacto que el dev puede copiar.
+- `references` con al menos 1 link (idealmente OWASP + Prisma/NestJS docs + seccion del GOES Guide).
+
+Todos los regression specs DEBEN declarar `remediation`. Sin esto, el spec es decorativo — el dev no sabe que arreglar.
+
+---
+
 ## Variantes especiales
 
-### `type: e2e_request_with_clock_skew` (ej. VULN-EXT-0005)
+### `type: e2e_request_with_clock_skew` (ej. VULN-XXX-NNNN)
 
 Necesita avanzar el reloj o manipular el `lastActivityAt` antes de la request:
 

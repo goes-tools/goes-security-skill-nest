@@ -7,7 +7,7 @@
 # - El snapshot de configuracion runtime drifta
 #
 # Generado por skill goes-security-testing. Modificar solo via PR aprobado
-# por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev (ver CODEOWNERS).
+# por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev (ver CODEOWNERS).
 
 name: GOES Security Gate
 

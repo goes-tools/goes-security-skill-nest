@@ -56,6 +56,61 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 // ─── Interfaces ─────────────────────────────────────────────────
+
+/**
+ * Actionable remediation info. Use it.remediation({...}) so the HTML modal
+ * shows a prominent "Como arreglar" block when the test fails.
+ *
+ * All fields are optional — fill the ones you have. The modal renders only
+ * the populated fields, in this order:
+ *   file/line  →  expected vs received diff  →  howToFix  →  references
+ */
+export interface Remediation {
+  /**
+   * Plain-language summary (1-2 sentences) of what failed and what the impact is.
+   * Avoid jargon — write for a dev who is new to security.
+   * Example: "El sistema esta enviando informacion extra en los mensajes de error que un
+   *          atacante puede usar para mapear la API."
+   */
+  summary?: string;
+
+  /**
+   * Ordered chain of verification steps the test followed to reach its conclusion.
+   * Each item is one step. Helps the dev trace the reasoning, not just see the result.
+   * Example: [
+   *   "Forzamos un error enviando { malformed: true } a POST /api/auth/login",
+   *   "Esperabamos un body con solo { statusCode, message }",
+   *   "Encontramos tambien los campos `path` y `timestamp` con precision de milisegundos"
+   * ]
+   */
+  howWeChecked?: string[];
+
+  /**
+   * Plain-language explanation of WHY this matters — the business / security impact
+   * in terms a non-expert can understand. Used in the modal as a "Por que importa" callout.
+   * Example: "El campo path deja ver rutas internas que un atacante puede enumerar.
+   *          El timestamp con ms permite ataques de temporizacion."
+   */
+  whyItMatters?: string;
+
+  /** Source file path relative to project root, e.g. "src/auth/auth.service.ts" */
+  file?: string;
+  /** Line number inside the file */
+  line?: number;
+  /** Function/symbol name (e.g. "validateDui()") */
+  symbol?: string;
+  /** What the test expected to find (concrete, copy-pasteable if possible) */
+  expected?: string;
+  /** What the test actually found in the code/runtime */
+  received?: string;
+  /** Step-by-step fix in plain text or markdown. Can be multi-line. */
+  howToFix?: string;
+  /** External references (docs, OWASP, GOES guide section) */
+  references?: Array<{ url?: string; title: string }>;
+  /** Snippet of correct code that the dev should aim for */
+  exampleCode?: string;
+}
+
 export interface TestMetadata {
   testName: string;
   testPath: string;
@@ -74,12 +129,44 @@ export interface TestMetadata {
   steps: string[];
   evidences: Array<{ name: string; data: unknown }>;
   /**
+   * Actionable fix info shown prominently in the modal when the test fails.
+   * Set via t.remediation({...}). See Remediation interface above.
+   */
+  remediation?: Remediation;
+  /**
    * If set, the reporter overrides the test status to "skipped" and renders a
    * Not Applicable badge with this reason. Use it when a checklist item does
    * not apply to the project under test (e.g. R57-R60 file upload rules on a
    * backend that does not accept uploads).
    */
   naReason?: string;
+
+  /**
+   * If set, the reporter overrides the test status to "skipped" and renders a
+   * "Riesgo Aceptado" (violet) badge — distinct from N/A (yellow).
+   *
+   * Use cases:
+   * - Internal-only system where the surface exists but exposure to public
+   *   internet is gated (VPN, IP allowlist).
+   * - Legacy library that requires unsafe CSP and migration is scheduled.
+   * - Risk evaluated by the team and consciously accepted with compensating
+   *   controls.
+   *
+   * Should NEVER be used to silently skip failing tests without justification —
+   * the doctor validates that every accepted_risk has:
+   *   - reason (non-empty)
+   *   - approved_by (@user)
+   *   - approved_at (ISO date)
+   *   - review_at (future date — once it expires, the risk must be re-evaluated)
+   */
+  acceptedRisk?: {
+    rid: string;
+    reason: string;
+    approvedBy: string;
+    approvedAt: string;
+    reviewAt: string;
+    compensatingControls?: string[];
+  };
 }
 
 // ─── Reporter Class ─────────────────────────────────────────────
@@ -177,6 +264,100 @@ class SecurityTestReporter {
   }
 
   /**
+   * Attach actionable fix info that the modal renders prominently when this
+   * test fails. Use it for tests that detect a specific code smell or missing
+   * config — the dev sees exactly which file to open and what to change.
+   *
+   * Example:
+   *   t.remediation({
+   *     file: 'src/admin-reports/admin-reports.service.ts',
+   *     line: 42,
+   *     expected: 'prisma.$queryRaw\`SELECT ... WHERE id = ${id}\` (parametrized)',
+   *     received: 'prisma.$queryRawUnsafe(\`SELECT ... WHERE id = ${id}\`)',
+   *     howToFix: 'Reemplazar $queryRawUnsafe por $queryRaw con template tag.',
+   *     references: [{ title: 'Prisma raw queries', url: 'https://prisma.io/docs' }],
+   *   });
+   */
+  remediation(info: Remediation): this {
+    this.meta.remediation = info;
+    return this;
+  }
+
+  /**
+   * Mark this test as Accepted Risk based on the project's snapshot.
+   *
+   * Reads `security.snapshot.json` (the project-level config approved by
+   * CODEOWNERS) and looks up the given R-ID in `accepted_risks`. If found,
+   * marks the test as skipped with a violet "Riesgo Aceptado" badge that
+   * shows the reason + approver + review date.
+   *
+   * If the R-ID is NOT in accepted_risks, the method returns false and the
+   * test continues normally (so the test runs its real assertions and fails
+   * if the defense is missing).
+   *
+   * Example usage at the start of a test:
+   *
+   *   it('R6 — robots.txt accessible', async () => {
+   *     const t = report();
+   *     t.epic('Configuracion').feature('Public Site Config').story('robots.txt');
+   *     t.tag('GOES Checklist R6');
+   *
+   *     if (await t.acceptedRiskIfDeclared('R6')) {
+   *       await t.flush();
+   *       return; // skip the real assertions, the snapshot accepts the risk
+   *     }
+   *
+   *     // normal test body if the risk is NOT accepted...
+   *   });
+   *
+   * Returns: true if the risk was found and accepted, false otherwise.
+   */
+  async acceptedRiskIfDeclared(rid: string, snapshotPath?: string): Promise<boolean> {
+    const fsModule = fs;
+    const pathModule = path;
+    const candidates = [
+      snapshotPath,
+      'test/security/security.snapshot.json',
+      './security.snapshot.json',
+    ].filter(Boolean) as string[];
+
+    for (const candidate of candidates) {
+      try {
+        const resolved = pathModule.resolve(process.cwd(), candidate);
+        if (!fsModule.existsSync(resolved)) continue;
+        const snap = JSON.parse(fsModule.readFileSync(resolved, 'utf-8'));
+        const risks = Array.isArray(snap.accepted_risks) ? snap.accepted_risks : [];
+        const found = risks.find((r: any) => r.rid === rid);
+        if (found) {
+          // Validar que tenga los campos minimos (sino, NO aceptamos — falla seguro)
+          if (!found.reason || !found.approved_by || !found.review_at) {
+            return false;
+          }
+          // Validar que review_at no haya expirado
+          const reviewDate = new Date(found.review_at);
+          if (isNaN(reviewDate.getTime()) || reviewDate < new Date()) {
+            return false;
+          }
+          // Aceptar el riesgo
+          this.meta.acceptedRisk = {
+            rid: found.rid,
+            reason: found.reason,
+            approvedBy: found.approved_by,
+            approvedAt: found.approved_at || '',
+            reviewAt: found.review_at,
+            compensatingControls: found.compensating_controls,
+          };
+          return true;
+        }
+      } catch (e) {
+        // Si el snapshot no se puede parsear, no aceptamos riesgo (falla seguro)
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Mark this test as Not Applicable. The reporter overrides the test status
    * to "skipped" and renders a Not Applicable badge with the given reason.
    *
@@ -244,6 +425,10 @@ export class AllureCompat {
   description(text: string) { this.reporter.descriptionHtml(text); }
   parameter(name: string, value: unknown) { this.reporter.parameter(name, value); }
   notApplicable(reason: string) { this.reporter.notApplicable(reason); }
+  remediation(info: Remediation) { this.reporter.remediation(info); }
+  async acceptedRiskIfDeclared(rid: string, snapshotPath?: string) {
+    return this.reporter.acceptedRiskIfDeclared(rid, snapshotPath);
+  }
 
   step<T = unknown>(name: string, fn?: () => T): T extends void ? this : T {
     return this.reporter.step(name, fn);

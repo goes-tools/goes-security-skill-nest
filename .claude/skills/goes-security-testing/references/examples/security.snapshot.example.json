@@ -2,10 +2,44 @@
   "$schema": "https://goes.gob.sv/security-snapshot.v1.json",
   "version": 1,
   "project": "REPLACE_WITH_PROJECT_NAME",
-  "approved_by": "@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev",
+  "approved_by": "@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev",
   "approved_at": "YYYY-MM-DD",
-  "notes": "Snapshot inicial generado por la skill goes-security-testing. Cualquier cambio requiere PR aprobado por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev segun CODEOWNERS.",
-
+  "notes": "Snapshot inicial generado por la skill goes-security-testing. Cualquier cambio requiere PR aprobado por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev segun CODEOWNERS.",
+  "project_profile": {
+    "type": "internal_admin",
+    "description": "Panel administrativo de uso interno (jefaturas). Acceso solo via VPN institucional. NO accesible desde Internet publico.",
+    "exposure": "internal",
+    "audience": "GOES staff (~50 usuarios)",
+    "data_classification": "datos personales de ciudadanos (DUI, direccion) — alta sensibilidad"
+  },
+  "accepted_risks": [
+    {
+      "rid": "R6",
+      "title": "robots.txt + sitemap.xml",
+      "reason": "Panel admin no esta expuesto a Internet publico. No es indexable por buscadores. Acceso solo via VPN.",
+      "approved_by": "@gerardo-amaya-dev",
+      "approved_at": "2026-06-04",
+      "review_at": "2026-12-04",
+      "compensating_controls": [
+        "VPN obligatorio para acceder al dominio",
+        "Auth Keycloak con MFA",
+        "IP allowlist a nivel LB"
+      ]
+    },
+    {
+      "rid": "R44_unsafe_inline_styles",
+      "title": "CSP con unsafe-inline en style-src",
+      "reason": "El panel admin usa una libreria interna legacy (corporate-ui-lib) que requiere estilos inline. Migracion planeada para Q1 2027.",
+      "approved_by": "@alejandro-montepeque-dev",
+      "approved_at": "2026-06-04",
+      "review_at": "2026-09-04",
+      "compensating_controls": [
+        "X-Frame-Options DENY previene clickjacking",
+        "Auth obligatoria — no hay puntos de inyeccion para XSS publico",
+        "Audit log de todas las acciones administrativas"
+      ]
+    }
+  ],
   "headers": {
     "content-security-policy": [
       "^default-src 'self'",
@@ -24,20 +58,35 @@
       "includeSubDomains",
       "preload"
     ],
-    "x-content-type-options": ["^nosniff$"],
-    "x-frame-options": ["^(DENY|SAMEORIGIN)$"],
-    "x-xss-protection": ["^0$"],
-    "referrer-policy": ["^strict-origin-when-cross-origin$"],
+    "x-content-type-options": [
+      "^nosniff$"
+    ],
+    "x-frame-options": [
+      "^(DENY|SAMEORIGIN)$"
+    ],
+    "x-xss-protection": [
+      "^0$"
+    ],
+    "referrer-policy": [
+      "^strict-origin-when-cross-origin$"
+    ],
     "permissions-policy": [
       "geolocation=\\(\\)",
       "camera=\\(\\)",
       "microphone=\\(\\)"
     ],
-    "cache-control": ["no-store"],
-    "cross-origin-resource-policy": ["^same-origin$"],
-    "cross-origin-opener-policy": ["^same-origin$"],
-    "cross-origin-embedder-policy": ["^require-corp$"],
-
+    "cache-control": [
+      "no-store"
+    ],
+    "cross-origin-resource-policy": [
+      "^same-origin$"
+    ],
+    "cross-origin-opener-policy": [
+      "^same-origin$"
+    ],
+    "cross-origin-embedder-policy": [
+      "^require-corp$"
+    ],
     "server": null,
     "x-powered-by": null,
     "x-cloud-trace-context": null,
@@ -50,7 +99,6 @@
     "x-ratelimit-remaining": null,
     "x-ratelimit-reset": null
   },
-
   "cors": {
     "allowed_origins": [
       "https://REPLACE_WITH_PROD_DOMAIN.srs.gob.sv"
@@ -61,11 +109,16 @@
       "https://.*\\.run\\.app",
       "\\*"
     ],
-    "allowed_methods": ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    "allowed_methods": [
+      "GET",
+      "POST",
+      "PATCH",
+      "DELETE",
+      "OPTIONS"
+    ],
     "max_age_seconds": 3600,
     "credentials": true
   },
-
   "session": {
     "access_token_ttl_minutes": 5,
     "refresh_token_ttl_days": 7,
@@ -77,7 +130,6 @@
       "path": "/"
     }
   },
-
   "rate_limit": {
     "general_per_minute": 100,
     "login_per_minute": 5,
@@ -85,9 +137,12 @@
     "register_per_minute": 5,
     "exposed_in_headers": false
   },
-
   "error_response": {
-    "allowed_keys": ["statusCode", "message", "error"],
+    "allowed_keys": [
+      "statusCode",
+      "message",
+      "error"
+    ],
     "forbidden_keys": [
       "path",
       "timestamp",
@@ -100,14 +155,12 @@
       "req"
     ]
   },
-
   "csp_unsafe_keywords_forbidden": [
     "unsafe-inline",
     "unsafe-eval",
     "unsafe-hashes",
     "unsafe-allow-redirects"
   ],
-
   "response_dto": {
     "forbidden_field_names": [
       "password",
@@ -123,13 +176,24 @@
       "totpSecret"
     ],
     "forbidden_value_patterns": [
-      { "name": "DUI completo", "pattern": "\\d{8}-\\d" },
-      { "name": "CUID Prisma", "pattern": "^c[a-z0-9]{24}$" },
-      { "name": "bcrypt hash", "pattern": "^\\$2[aby]\\$\\d{2}\\$" },
-      { "name": "JWT en payload publico", "pattern": "^eyJ[A-Za-z0-9_-]+\\." }
+      {
+        "name": "DUI completo",
+        "pattern": "\\d{8}-\\d"
+      },
+      {
+        "name": "CUID Prisma",
+        "pattern": "^c[a-z0-9]{24}$"
+      },
+      {
+        "name": "bcrypt hash",
+        "pattern": "^\\$2[aby]\\$\\d{2}\\$"
+      },
+      {
+        "name": "JWT en payload publico",
+        "pattern": "^eyJ[A-Za-z0-9_-]+\\."
+      }
     ]
   },
-
   "captcha": {
     "required_on_public_endpoints": [
       "/api/auth/register",

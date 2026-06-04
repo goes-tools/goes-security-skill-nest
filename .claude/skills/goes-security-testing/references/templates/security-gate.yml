@@ -7,15 +7,19 @@
 # - El snapshot de configuracion runtime drifta
 #
 # Generado por skill goes-security-testing. Modificar solo via PR aprobado
-# por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev (ver CODEOWNERS).
+# por @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev (ver CODEOWNERS).
 
 name: GOES Security Gate
 
 on:
+  # El gate corre cuando se intenta mergear a CUALQUIERA de las 4 ramas protegidas.
+  # Acá es donde el merge queda BLOQUEADO si algo falla.
   pull_request:
-    branches: [main, master, release/**]
+    branches: [dev, qa, uat, main, master, release/**]
+  # En push corre solo para auditoría (queda en el historial del run).
+  # No bloquea nada porque el código ya está en la rama.
   push:
-    branches: [main, master]
+    branches: [dev, qa, uat, main, master]
 
 permissions:
   contents: read
@@ -136,27 +140,376 @@ jobs:
           path: reports/security/security-report.html
           retention-days: 30
 
-      - name: Comment HTML report on PR
-        if: github.event_name == 'pull_request'
+      - name: Convertir HTML a PDF
+        if: always() && hashFiles('reports/security/security-report.html') != ''
+        run: |
+          set -e
+          # Usar chromium-headless (preinstalado en ubuntu-latest)
+          if command -v google-chrome >/dev/null; then
+            BROWSER="google-chrome"
+          elif command -v chromium >/dev/null; then
+            BROWSER="chromium"
+          else
+            echo "Chromium no encontrado, instalando..."
+            sudo apt-get update -qq && sudo apt-get install -y chromium-browser
+            BROWSER="chromium-browser"
+          fi
+          $BROWSER --headless --disable-gpu --no-sandbox \
+            --print-to-pdf=reports/security/security-report.pdf \
+            --no-pdf-header-footer \
+            --print-to-pdf-no-header \
+            "file://$(pwd)/reports/security/security-report.html"
+          ls -la reports/security/security-report.pdf
+
+      - name: Upload PDF report
+        if: always() && hashFiles('reports/security/security-report.pdf') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-report-pdf
+          path: reports/security/security-report.pdf
+          retention-days: 90
+
+      - name: Calcular resumen para el email
+        if: github.event_name == 'push' && always()
+        id: email_summary
+        run: |
+          set -e
+          REPORT="reports/security/security-report.html"
+          DOCTOR="reports/security/doctor-report.json"
+
+          # Extraer stats de tests
+          PASSED=0; FAILED=0; NA=0; RIESGO_ACEPTADO=0
+          if [ -f "$REPORT" ]; then
+            STATS=$(node -e "
+              const html = require('fs').readFileSync('$REPORT','utf-8');
+              const m = html.match(/const DATA = (\{[\s\S]+?\});\s+let currentFilter/);
+              if (!m) { console.log('{}'); process.exit(0); }
+              const data = JSON.parse(m[1]);
+              const tests = data.tests || [];
+              const counts = {
+                passed: tests.filter(t => t.status === 'passed').length,
+                failed: tests.filter(t => t.status === 'failed').length,
+                na: tests.filter(t => t.naReason && !t.acceptedRisk).length,
+                accepted_risk: tests.filter(t => t.acceptedRisk).length,
+                total: tests.length,
+              };
+              console.log(JSON.stringify(counts));
+            " 2>/dev/null || echo "{}")
+            PASSED=$(echo "$STATS" | node -e "process.stdin.on('data', d => { const o = JSON.parse(d); console.log(o.passed || 0); })" 2>/dev/null || echo 0)
+            FAILED=$(echo "$STATS" | node -e "process.stdin.on('data', d => { const o = JSON.parse(d); console.log(o.failed || 0); })" 2>/dev/null || echo 0)
+            NA=$(echo "$STATS" | node -e "process.stdin.on('data', d => { const o = JSON.parse(d); console.log(o.na || 0); })" 2>/dev/null || echo 0)
+            RIESGO_ACEPTADO=$(echo "$STATS" | node -e "process.stdin.on('data', d => { const o = JSON.parse(d); console.log(o.accepted_risk || 0); })" 2>/dev/null || echo 0)
+          fi
+
+          # Doctor status
+          DOC_STATUS="UNKNOWN"
+          if [ -f "$DOCTOR" ]; then
+            DOC_STATUS=$(node -e "console.log(require('./$DOCTOR').status)" 2>/dev/null || echo "UNKNOWN")
+          fi
+
+          # Traffic light
+          if [ "$FAILED" = "0" ] && [ "$DOC_STATUS" = "PASS" ]; then
+            LIGHT="🟢 LISTO PARA DEPLOY"
+          elif [ "$FAILED" = "0" ]; then
+            LIGHT="🟡 ATENCIÓN — doctor con observaciones"
+          else
+            LIGHT="🔴 NO LISTO — tests rojos"
+          fi
+
+          {
+            echo "light=$LIGHT"
+            echo "passed=$PASSED"
+            echo "failed=$FAILED"
+            echo "na=$NA"
+            echo "accepted_risk=$RIESGO_ACEPTADO"
+            echo "doc_status=$DOC_STATUS"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Enviar reporte PDF por correo al lider de desarrollo
+        if: github.event_name == 'push' && always() && hashFiles('reports/security/security-report.pdf') != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT || 587 }}
+          secure: ${{ secrets.SMTP_SECURE || false }}
+          username: ${{ secrets.SMTP_USER }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          from: GOES Security Gate <${{ secrets.SMTP_FROM || secrets.SMTP_USER }}>
+          to: ludwing.serapio@goes.gob.sv
+          subject: |
+            [${{ steps.email_summary.outputs.light }}] Security Report — ${{ github.repository }} / ${{ github.ref_name }}
+          body: |
+            Reporte de seguridad generado tras el ultimo merge a la rama `${{ github.ref_name }}` del repositorio `${{ github.repository }}`.
+
+            ====================================================
+            RESUMEN
+            ====================================================
+            Estado:        ${{ steps.email_summary.outputs.light }}
+
+            Tests aprobados:        ${{ steps.email_summary.outputs.passed }}
+            Tests fallidos:         ${{ steps.email_summary.outputs.failed }}
+            Tests N/A justificados: ${{ steps.email_summary.outputs.na }}
+            Riesgos aceptados:      ${{ steps.email_summary.outputs.accepted_risk }}
+
+            Doctor:        ${{ steps.email_summary.outputs.doc_status }}
+
+            ====================================================
+            DETALLE
+            ====================================================
+            En el PDF adjunto vas a encontrar:
+            - Banner ejecutivo con traffic light
+            - Panel de Pentest Regression con cada VULN-ID y su estado
+            - Matriz de cobertura del checklist GOES (57 items)
+            - Lista de tests fallidos con su detalle (file, line, expected vs received, pasos para arreglar)
+            - Riesgos aceptados con su justificacion, aprobador y fecha de re-evaluacion
+            - Items marcados como N/A con su motivo verificable
+
+            ====================================================
+            ACCIONES SUGERIDAS
+            ====================================================
+            - Si hay tests rojos -> hay que arreglar el codigo o convertirlos en N/A / Riesgo Aceptado.
+            - Si hay riesgos aceptados que vencen pronto -> programar re-evaluacion.
+            - Si todo esta verde -> el deploy esta autorizado por el gate.
+
+            ====================================================
+            REFERENCIAS
+            ====================================================
+            Repo:       ${{ github.server_url }}/${{ github.repository }}
+            Run:        ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Commit:     ${{ github.sha }}
+            Branch:     ${{ github.ref_name }}
+            Trigger:    push tras merge
+
+            --
+            Reporte generado automaticamente por GOES Security Gate.
+            Generado: ${{ github.event.head_commit.timestamp }}
+          attachments: reports/security/security-report.pdf
+
+      - name: Generate GitHub Job Summary (visible en UI sin bajar artifact)
+        if: always()
+        run: |
+          set -e
+          REPORT="reports/security/security-report.html"
+          DOCTOR="reports/security/doctor-report.json"
+
+          # Extraer stats del HTML (window.__GOES_STATS__) y/o del doctor JSON.
+          # Si alguno no existe, mostramos lo que hay.
+          {
+            echo "# GOES Security Gate — Resultado del run"
+            echo ""
+            echo "Este resumen lo ve cualquier reviewer abriendo el run en Actions, sin necesidad de descargar artifacts."
+            echo ""
+
+            # ── 1. Doctor checks ────────────────────────────────
+            if [ -f "$DOCTOR" ]; then
+              STATUS=$(node -e "console.log(require('./$DOCTOR').status)")
+              PASSED=$(node -e "console.log(require('./$DOCTOR').passed)")
+              TOTAL=$(node -e "console.log(require('./$DOCTOR').total)")
+              ICON=$([ "$STATUS" = "PASS" ] && echo "✅" || echo "❌")
+              echo "## $ICON Doctor — $PASSED / $TOTAL checks"
+              echo ""
+              echo "| Check | Estado | Detalle |"
+              echo "|-------|--------|---------|"
+              node -e "
+                const d = require('./$DOCTOR');
+                for (const c of d.checks) {
+                  const ico = c.passed ? '✅' : '❌';
+                  const det = c.details || (c.missing && c.missing.length ? c.missing.slice(0,3).join(', ') : '');
+                  console.log('| ' + c.id + ' | ' + ico + ' | ' + det + ' |');
+                }
+              "
+              echo ""
+            else
+              echo "## ⚠ Doctor — no se genero reporte"
+              echo ""
+            fi
+
+            # ── 2. Test stats ────────────────────────────────
+            if [ -f "$REPORT" ]; then
+              STATS=$(node -e "
+                const html = require('fs').readFileSync('$REPORT','utf-8');
+                const m = html.match(/window\.__GOES_STATS__\s*=\s*(\{[^}]+\})/);
+                if (!m) { console.log('null'); process.exit(0); }
+                console.log(m[1]);
+              ")
+              if [ "$STATS" != "null" ]; then
+                echo "## 📊 Cobertura del checklist GOES"
+                echo ""
+                node -e "
+                  const s = $STATS;
+                  console.log('| Métrica | Valor |');
+                  console.log('|---------|-------|');
+                  console.log('| Items totales del checklist | ' + (s.totalChecklistItems || 'N/A') + ' |');
+                  console.log('| Cubiertos | ' + (s.covered || 'N/A') + ' |');
+                  console.log('| N/A justificados | ' + (s.na || 'N/A') + ' |');
+                  console.log('| Sin cubrir | ' + (s.missing || 'N/A') + ' |');
+                "
+                echo ""
+              fi
+            fi
+
+            # ── 3. Tests fallidos (si los hay) ────────────────
+            FAILED=$(node -e "
+              try {
+                const html = require('fs').readFileSync('$REPORT','utf-8');
+                const dm = html.match(/const DATA = (\{[\s\S]+?\});\s+let currentFilter/);
+                if (!dm) { console.log('0'); process.exit(0); }
+                const data = JSON.parse(dm[1]);
+                const failed = data.tests.filter(t => t.status === 'failed');
+                console.log(failed.length);
+              } catch { console.log('0'); }
+            " 2>/dev/null || echo "0")
+
+            if [ "$FAILED" != "0" ]; then
+              echo "## ❌ Tests fallidos: $FAILED"
+              echo ""
+              echo "| Test | Severidad | Tags |"
+              echo "|------|-----------|------|"
+              node -e "
+                const html = require('fs').readFileSync('$REPORT','utf-8');
+                const dm = html.match(/const DATA = (\{[\s\S]+?\});\s+let currentFilter/);
+                if (!dm) process.exit(0);
+                const data = JSON.parse(dm[1]);
+                const failed = data.tests.filter(t => t.status === 'failed').slice(0, 25);
+                for (const t of failed) {
+                  const tags = (t.tags || []).filter(x => x.startsWith('GOES Checklist') || x.startsWith('OWASP') || x.startsWith('Pentest Regression')).slice(0,3).join(', ');
+                  console.log('| ' + (t.fullName || t.name) + ' | ' + (t.severity || '-') + ' | ' + tags + ' |');
+                }
+              " 2>/dev/null || true
+              echo ""
+              echo "_> Descargar el artifact 'security-report-local' para ver el detalle completo (file, expected vs received, howToFix)._"
+              echo ""
+            else
+              echo "## ✅ Todos los tests pasaron"
+              echo ""
+            fi
+
+            # ── 4. Pentest regression status ──────────────────
+            REGRESSION_COUNT=$(grep -c "Pentest Regression VULN-" .claude/skills/goes-security-testing/references/pentest-history.yaml 2>/dev/null || echo 0)
+            REGRESSION_SPECS=$(ls test/security/regression/VULN-*.regression.spec.ts 2>/dev/null | wc -l)
+            echo "## 🛡 Pentest Regression"
+            echo ""
+            echo "- VULN-IDs registrados en pentest-history.yaml: **$REGRESSION_COUNT**"
+            echo "- Regression specs en test/security/regression/: **$REGRESSION_SPECS**"
+            if [ "$REGRESSION_COUNT" != "$REGRESSION_SPECS" ]; then
+              echo "- ⚠ **Desincronización detectada** — falta(n) $((REGRESSION_COUNT - REGRESSION_SPECS)) spec(s)."
+            else
+              echo "- ✅ Sincronizado"
+            fi
+            echo ""
+
+            # ── 5. CTA al final ──────────────────────────────
+            echo "---"
+            echo ""
+            echo "**Para revisar este PR:**"
+            echo "1. Bajar el artifact \`security-report-local\` para ver el HTML completo."
+            echo "2. Cada test rojo tiene en el modal: archivo, línea, qué se esperaba, qué se encontró, pasos exactos para arreglar."
+            echo "3. Si todo está bien → \`Approve\`. Si hay rojos justificados → comentar y dejar al dev que decida."
+            echo "4. Recuerdo: para mergear hace falta **al menos 1 review aprobado de un CODEOWNER**."
+
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Read summary stats for PR comment
+        if: github.event_name == 'pull_request' && always()
+        id: stats
+        run: |
+          REPORT="reports/security/security-report.html"
+          DOCTOR="reports/security/doctor-report.json"
+
+          if [ -f "$DOCTOR" ]; then
+            DOC_STATUS=$(node -e "console.log(require('./$DOCTOR').status)" 2>/dev/null || echo "UNKNOWN")
+            DOC_PASSED=$(node -e "console.log(require('./$DOCTOR').passed)" 2>/dev/null || echo "?")
+            DOC_TOTAL=$(node -e "console.log(require('./$DOCTOR').total)" 2>/dev/null || echo "?")
+          else
+            DOC_STATUS="UNKNOWN"; DOC_PASSED="?"; DOC_TOTAL="?"
+          fi
+
+          if [ -f "$REPORT" ]; then
+            FAILED=$(node -e "
+              try {
+                const html = require('fs').readFileSync('$REPORT','utf-8');
+                const dm = html.match(/const DATA = (\{[\s\S]+?\});\s+let currentFilter/);
+                if (!dm) { console.log('?'); process.exit(0); }
+                const data = JSON.parse(dm[1]);
+                console.log(data.tests.filter(t => t.status === 'failed').length);
+              } catch { console.log('?'); }
+            " 2>/dev/null || echo "?")
+            PASSED=$(node -e "
+              try {
+                const html = require('fs').readFileSync('$REPORT','utf-8');
+                const dm = html.match(/const DATA = (\{[\s\S]+?\});\s+let currentFilter/);
+                if (!dm) { console.log('?'); process.exit(0); }
+                const data = JSON.parse(dm[1]);
+                console.log(data.tests.filter(t => t.status === 'passed').length);
+              } catch { console.log('?'); }
+            " 2>/dev/null || echo "?")
+          else
+            FAILED="?"; PASSED="?"
+          fi
+
+          # Decidir traffic light
+          if [ "$DOC_STATUS" = "PASS" ] && [ "$FAILED" = "0" ]; then
+            LIGHT="🟢"
+            VERDICT="LISTO PARA REVIEW"
+          elif [ "$FAILED" = "0" ]; then
+            LIGHT="🟡"
+            VERDICT="ATENCIÓN — doctor con observaciones"
+          else
+            LIGHT="🔴"
+            VERDICT="NO LISTO — hay tests rojos"
+          fi
+
+          # Exportar para el siguiente step
+          {
+            echo "light=$LIGHT"
+            echo "verdict=$VERDICT"
+            echo "doc_status=$DOC_STATUS"
+            echo "doc_passed=$DOC_PASSED"
+            echo "doc_total=$DOC_TOTAL"
+            echo "tests_passed=$PASSED"
+            echo "tests_failed=$FAILED"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment summary + link on PR
+        if: github.event_name == 'pull_request' && always()
         uses: marocchino/sticky-pull-request-comment@v2
         with:
-          header: security-report-local
+          header: goes-security-gate
           message: |
-            ## GOES Security Gate — local build
+            ## ${{ steps.stats.outputs.light }} GOES Security Gate — ${{ steps.stats.outputs.verdict }}
 
-            HTML report disponible en los artifacts: `security-report-local`.
+            | Métrica | Valor |
+            |---------|-------|
+            | Tests aprobados | **${{ steps.stats.outputs.tests_passed }}** |
+            | Tests fallidos | **${{ steps.stats.outputs.tests_failed }}** |
+            | Doctor checks | **${{ steps.stats.outputs.doc_passed }} / ${{ steps.stats.outputs.doc_total }}** (${{ steps.stats.outputs.doc_status }}) |
 
-            Revisar antes de aprobar:
-            - Todos los tests `Pentest Regression VULN-*` en verde
-            - 0 items del checklist en N/A sin justificacion
-            - Snapshot de configuracion sin drift
+            ### Para reviewers (CODEOWNERS)
+
+            1. **Ver el resumen completo** → click en el job [`Security tests (local build)`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) — al final hay un **Job Summary** con tabla detallada de cada test rojo, doctor checks y regression status.
+            2. **Descargar el HTML completo** → en el run, artifact `security-report-local`. Cada test rojo tiene archivo, línea, esperado vs encontrado y pasos exactos para arreglar.
+            3. **Aprobar o rechazar** → solo hace falta **1 review de un CODEOWNER**. Si rechazás, comentá la razón en el PR.
+
+            > **Para mergear este PR:**
+            > - Necesitás **1 approval de un CODEOWNER** + **TODOS los checks en verde** + rama actualizada.
+            > - **No hay bypass.** Nadie (ni admins) puede mergear con checks en rojo.
+            >
+            > **Si un test sale en rojo y vos pensás que NO aplica a este proyecto:**
+            >
+            > 1. **Sin superficie** (ej. R57-R63 sin uploads): agregá `t.notApplicable('grep verificable')` al test → sale 🟡 amarillo N/A.
+            >
+            > 2. **Con superficie pero riesgo aceptado por contexto** (ej. R6 robots.txt en panel interno via VPN): en el MISMO PR agregá la entrada en `test/security/security.snapshot.json -> accepted_risks` con motivo + compensating_controls + review_at, y en el test agregá `if (await t.acceptedRiskIfDeclared('Rxx')) { await t.flush(); return; }`. Al re-correr sale 🟣 violeta "Riesgo Aceptado". CODEOWNERS revisan el snapshot.
+            >
+            > 3. **Bug real**: arreglá el código en `src/` y dejá el test rojo hasta que pase verde.
 
   security-tests-release:
     name: Security tests (release env)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: security-tests-local
-    if: github.event_name == 'pull_request' && contains(github.head_ref, 'release')
+    # Corre la suite contra ambientes desplegados solo en PRs hacia uat/main/release.
+    # En dev/qa el smoke local del job security-tests-local alcanza.
+    if: github.event_name == 'pull_request' && contains(fromJSON('["uat","main","master"]'), github.base_ref) || startsWith(github.base_ref, 'release/')
 
     steps:
       - name: Checkout

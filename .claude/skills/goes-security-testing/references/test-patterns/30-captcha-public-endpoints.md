@@ -5,7 +5,7 @@
 **Covers:** R5 (XSS / Input Sanitization), R14 (Auth failures: MFA, rate limit, session mgmt — incluye challenge humano), R27 (Brute Force Protection), R55 (Rate Limiting reforzado en endpoints publicos)
 
 **Regresion cubierta:**
-- **VULN-EXT-0003** — `/api/auth/verify-dui` (endpoint mas sensible del portal externo, expone PII del RNPN) NO implementa reCAPTCHA, mientras que `/api/auth/register` SI lo tiene. La proteccion esta en el paso menos critico del flujo.
+- **VULN-XXX-NNNN** — `/api/auth/verify-dui` (endpoint mas sensible del portal externo, expone PII del RNPN) NO implementa reCAPTCHA, mientras que `/api/auth/register` SI lo tiene. La proteccion esta en el paso menos critico del flujo.
 
 ---
 
@@ -23,7 +23,7 @@ Lista canonica de endpoints publicos sensibles (la skill debe enumerar y verific
 | `POST /api/auth/login` | Brute force / credential stuffing |
 | `POST /api/auth/forgot-password` | Envia email, enumeracion de cuentas |
 | `POST /api/auth/recover-password` | Reset token validation |
-| `POST /api/auth/verify-dui` (o equivalente lookup de identidad) | **VULN-EXT-0003 — expone PII del RNPN** |
+| `POST /api/auth/verify-dui` (o equivalente lookup de identidad) | **VULN-XXX-NNNN — expone PII del RNPN** |
 | `POST /api/auth/verify-email` | Envia OTP |
 | `POST /api/contact` | Envia email a admin, spam |
 | `POST /api/newsletter/subscribe` | Spam, enumeracion de emails |
@@ -53,7 +53,7 @@ const SENSITIVE_PUBLIC_ENDPOINTS = [
   { method: 'POST', path: '/api/auth/login',            reason: 'Brute force / credential stuffing' },
   { method: 'POST', path: '/api/auth/forgot-password',  reason: 'Envia email, enumeracion' },
   { method: 'POST', path: '/api/auth/recover-password', reason: 'Reset token validation' },
-  { method: 'POST', path: '/api/auth/verify-dui',       reason: 'VULN-EXT-0003: lookup de PII RNPN' },
+  { method: 'POST', path: '/api/auth/verify-dui',       reason: 'VULN-XXX-NNNN: lookup de PII RNPN' },
   { method: 'POST', path: '/api/auth/verify-email',     reason: 'Envia OTP' },
   { method: 'POST', path: '/api/contact',               reason: 'Envia email a admin, spam' },
 ];
@@ -65,7 +65,7 @@ it('PENTEST R14 — sensitive public endpoints MUST reject requests without capt
   t.story('Endpoints publicos sensibles requieren captcha valido o devuelven 400/403');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A07', 'OWASP API2', 'GOES Checklist R14', 'GOES Checklist R55');
-  t.tag('Pentest Regression VULN-EXT-0003');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   const findings: Array<{
     endpoint: string;
@@ -121,7 +121,7 @@ it('R14 config — RecaptchaGuard o equivalente esta declarado en cada endpoint 
   t.story('Static analysis: decorador @UseGuards(RecaptchaGuard) presente en cada controller');
   t.severity('blocker');
   t.tag('Config', 'GOES Checklist R14');
-  t.tag('Pentest Regression VULN-EXT-0003');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   const fs = require('fs');
   const path = require('path');
@@ -190,7 +190,7 @@ it('PENTEST R14 — captcha guard MUST validate token server-side, not just pres
   t.story('Token de captcha invalido es rechazado por validacion server-side');
   t.severity('blocker');
   t.tag('Pentest', 'GOES Checklist R14');
-  t.tag('Pentest Regression VULN-EXT-0003');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   // Enviar un token de captcha obviamente falso
   const fakeToken = 'AAAAAA-fake-token-not-a-real-recaptcha-response-AAAAAA';

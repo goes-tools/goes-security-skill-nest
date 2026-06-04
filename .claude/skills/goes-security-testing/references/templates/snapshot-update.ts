@@ -2,12 +2,12 @@
 //
 // Genera o actualiza test/security/security.snapshot.json capturando los
 // valores reales que el backend retorna. CAMBIOS A ESTE ARCHIVO REQUIEREN
-// APROBACION DE @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev segun CODEOWNERS.
+// APROBACION DE @gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev segun CODEOWNERS.
 
+import { INestApplication } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
 import * as fs from 'fs';
 import * as path from 'path';
-import { Test } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
 import * as request from 'supertest';
 import { AppModule } from '../src/app.module';
 
@@ -23,7 +23,7 @@ async function main() {
     $schema: 'https://goes.gob.sv/security-snapshot.v1.json',
     version: 1,
     project: require('../package.json').name,
-    approved_by: '@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-corte-dev',
+    approved_by: '@gerardo-amaya-dev,@alejandro-montepeque-dev,@angel-bran-dev,@jose-orellana-dev,@noe-cortez-dev',
     approved_at: new Date().toISOString().slice(0, 10),
     headers: {
       'content-security-policy': [headers['content-security-policy'] ? `^${escapeRegex(headers['content-security-policy'])}$` : 'MISSING'],

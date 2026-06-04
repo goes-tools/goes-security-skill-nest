@@ -10,7 +10,7 @@
 >   reaches the reporter.
 > - `attach(name, data)` is now async — call it as `await attach(...)`.
 
-**Covers:** R44 (CSP — INCLUYE prohibicion estricta de `unsafe-inline`/`unsafe-eval`/wildcard, regresion VULN-EXT-0011), R45 (X-Content-Type-Options, X-Frame-Options, CORP/COOP — regresion VULN-INT-0009), R46 (HSTS), R47 (X-XSS-Protection), R48 (Referrer-Policy), R49 (Permissions-Policy), R50 (Cache-Control)
+**Covers:** R44 (CSP — INCLUYE prohibicion estricta de `unsafe-inline`/`unsafe-eval`/wildcard, regresion VULN-XXX-NNNN), R45 (X-Content-Type-Options, X-Frame-Options, CORP/COOP — regresion VULN-XXX-NNNN), R46 (HSTS), R47 (X-XSS-Protection), R48 (Referrer-Policy), R49 (Permissions-Policy), R50 (Cache-Control)
 
 ```typescript
 it('should configure all required HTTP security headers', async () => {
@@ -51,7 +51,7 @@ it('should configure all required HTTP security headers', async () => {
     expect(csp).toContain("default-src 'self'");
 
     // Capa critica: el CSP NO debe contener directivas inseguras en NINGUNA seccion
-    // (regresion VULN-EXT-0011 — style-src 'self' 'unsafe-inline' fue marcado en pentest)
+    // (regresion VULN-XXX-NNNN — style-src 'self' 'unsafe-inline' fue marcado en pentest)
     expect(csp).not.toMatch(/unsafe-inline/);
     expect(csp).not.toMatch(/unsafe-eval/);
     expect(csp).not.toMatch(/unsafe-hashes/);
@@ -167,10 +167,53 @@ it('PENTEST R44 — CSP MUST NOT include unsafe-inline / unsafe-eval / unsafe-ha
   await allure.tag('OWASP A05');
   await allure.tag('OWASP A03');
   await allure.tag('GOES Checklist R44');
-  await allure.tag('Pentest Regression VULN-EXT-0011');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary:
+      'La configuracion de seguridad del navegador (CSP) esta abriendo una puerta: permite ' +
+      'estilos inline, lo que habilita ataques de inyeccion de CSS y manipulacion visual.',
+    howWeChecked: [
+      'Hicimos GET a varios endpoints capturando el header Content-Security-Policy',
+      'Buscamos que NO contenga las palabras clave "unsafe-inline", "unsafe-eval", "unsafe-hashes"',
+      'Encontramos `style-src self unsafe-inline` — la directiva permite estilos inline sin restriccion',
+    ],
+    whyItMatters:
+      'Aunque parezca cosmetico, un atacante con cualquier punto de inyeccion puede usar CSS ' +
+      'malicioso para: capturar lo que el usuario escribe en formularios sensibles, superponer ' +
+      'elementos invisibles que capturen clicks (clickjacking avanzado), o filtrar datos visibles ' +
+      'en el DOM hacia un servidor externo. Es una capa de defensa que deberia ser dura.',
+    file: 'src/main.ts (configuracion de helmet)',
+    symbol: 'app.use(helmet({...}))',
+    expected: 'helmet con CSP { styleSrc: ["\'self\'"], scriptSrc: ["\'self\'"] } sin unsafe-*',
+    received: 'helmet con CSP { styleSrc: ["\'self\'", "\'unsafe-inline\'"] }',
+    howToFix:
+      '1. Abrir src/main.ts y localizar la llamada app.use(helmet({ contentSecurityPolicy: {...} })).\n' +
+      '2. Quitar todas las apariciones de "\'unsafe-inline\'", "\'unsafe-eval\'" y "\'unsafe-hashes\'" de las directivas CSP.\n' +
+      '3. Si hay estilos inline en el frontend que la app rendea, migrarlos a hojas externas servidas desde el mismo origen.\n' +
+      '4. Si por necesidad tecnica deben existir estilos inline puntuales, usar nonces criptograficos por request en lugar de \'unsafe-inline\'.',
+    exampleCode:
+      'app.use(helmet({\n' +
+      '  contentSecurityPolicy: {\n' +
+      '    useDefaults: true,\n' +
+      '    directives: {\n' +
+      '      defaultSrc: ["\'self\'"],\n' +
+      '      scriptSrc: ["\'self\'"],\n' +
+      '      styleSrc: ["\'self\'"],         // SIN unsafe-inline\n' +
+      '      frameAncestors: ["\'none\'"],\n' +
+      '    },\n' +
+      '  },\n' +
+      '}));',
+    references: [
+      { title: 'GOES Guide Seccion 8 — HTTP Security Headers' },
+      { title: 'helmet docs', url: 'https://helmetjs.github.io/' },
+      { title: 'CSP — MDN', url: 'https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP' },
+    ],
+  });
+
   await allure.description(
     '## Vulnerability Prevented\n' +
-    '**CSS / Script Injection via permissive CSP** — VULN-EXT-0011 del\n' +
+    '**CSS / Script Injection via permissive CSP** — VULN-XXX-NNNN del\n' +
     'pentest del 27/05/2026 reporto `style-src self unsafe-inline`,\n' +
     'lo cual habilita CSS injection, UI redressing y clickjacking avanzado.\n\n' +
     '## Defense Implemented\n' +
@@ -238,10 +281,10 @@ it('PENTEST R45 — Cross-Origin-* hardening (CORP/COOP/COEP) for internal admin
   await allure.tag('Pentest');
   await allure.tag('OWASP A05');
   await allure.tag('GOES Checklist R45');
-  await allure.tag('Pentest Regression VULN-INT-0009');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
   await allure.description(
     '## Vulnerability Prevented\n' +
-    'VULN-INT-0009 reporto `Cross-Origin-Resource-Policy: cross-origin` en\n' +
+    'VULN-XXX-NNNN reporto `Cross-Origin-Resource-Policy: cross-origin` en\n' +
     'el panel admin interno, ampliando la superficie de ataque ante Spectre\n' +
     'y cross-site leaks.\n\n' +
     '## Defense Implemented\n' +

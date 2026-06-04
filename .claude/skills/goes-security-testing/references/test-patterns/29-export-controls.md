@@ -5,7 +5,7 @@
 **Covers:** R9 (RBAC server-side), R11 (DTO Validation), R55 (Rate Limiting), OWASP API4 (Unrestricted Resource Consumption), OWASP A04 (Insecure Design)
 
 **Regresion cubierta:**
-- **VULN-INT-0004** — `POST /api/reports/permits` con `{"format":"xlsx"}` exportaba la BD completa de permisos sin filtros obligatorios ni limite de volumen
+- **VULN-XXX-NNNN** — `POST /api/reports/permits` con `{"format":"xlsx"}` exportaba la BD completa de permisos sin filtros obligatorios ni limite de volumen
 
 ---
 
@@ -45,10 +45,10 @@ it('PENTEST R11/R55 — export endpoints MUST reject requests without mandatory 
   t.story('Endpoints de export rechazan request con solo `format`, exigen filtros');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP API4', 'OWASP A04', 'GOES Checklist R11', 'GOES Checklist R55');
-  t.tag('Pentest Regression VULN-INT-0004');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
   t.description = (`
 ## Vulnerability Prevented
-**Mass Data Exfiltration via Export** — VULN-INT-0004 reporto que
+**Mass Data Exfiltration via Export** — VULN-XXX-NNNN reporto que
 POST /api/reports/permits con body {"format":"xlsx"} descargaba la BD
 completa de permisos. Sin filtros obligatorios, un funcionario o cuenta
 comprometida exfiltra toda la informacion de ciudadanos en un request.
@@ -116,7 +116,7 @@ it('PENTEST R11 — export DTO MUST declare filters as @IsDefined, NOT @IsOption
   t.story('Static analysis del DTO de export: filtros son obligatorios');
   t.severity('blocker');
   t.tag('Config', 'GOES Checklist R11');
-  t.tag('Pentest Regression VULN-INT-0004');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   const fs = require('fs');
   const path = require('path');
@@ -171,7 +171,7 @@ it('PENTEST R55 — export service MUST apply LIMIT and audit-log every export',
   t.story('Service de export limita registros y registra audit log');
   t.severity('blocker');
   t.tag('Pentest', 'OWASP A09', 'OWASP API4', 'GOES Checklist R55');
-  t.tag('Pentest Regression VULN-INT-0004');
+  t.tag('Pentest Regression VULN-XXX-NNNN');
 
   const fs = require('fs');
   const path = require('path');

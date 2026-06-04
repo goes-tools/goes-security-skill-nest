@@ -10,7 +10,7 @@
 >   reaches the reporter.
 > - `attach(name, data)` is now async — call it as `await attach(...)`.
 
-**Covers:** R13 (Token Lifetime), R17 (Session ID Entropy), R18 (Session Fixation Prevention), R32 (Refresh Rotation), R35 (Session Inactivity Timeout — INCLUYE idle timeout independiente del exp del JWT, regresion VULN-EXT-0005)
+**Covers:** R13 (Token Lifetime), R17 (Session ID Entropy), R18 (Session Fixation Prevention), R32 (Refresh Rotation), R35 (Session Inactivity Timeout — INCLUYE idle timeout independiente del exp del JWT, regresion VULN-XXX-NNNN)
 
 ```typescript
 it('should generate session IDs with sufficient entropy', async () => {
@@ -151,10 +151,57 @@ it('PENTEST R35 — refresh token with valid exp MUST be rejected after 30min id
   await allure.tag('Pentest');
   await allure.tag('OWASP A07');
   await allure.tag('GOES Checklist R35');
-  await allure.tag('Pentest Regression VULN-EXT-0005');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
+
+  t.remediation({
+    summary:
+      'La sesion del usuario no muere por inactividad. Aunque el JWT siga vigente, no se ' +
+      'invalida el acceso si la persona dejo el equipo abandonado por horas o dias.',
+    howWeChecked: [
+      'Hicimos login y capturamos el refresh token (exp de 7 dias)',
+      'Modificamos la columna lastActivityAt para simular que pasaron 31 minutos sin actividad',
+      'Hicimos un GET protegido — esperabamos 401 porque la sesion esta inactiva',
+      'El sistema devolvio 200 OK: nadie esta midiendo la inactividad, solo el exp del token',
+    ],
+    whyItMatters:
+      'Un atacante que tenga acceso fisico o logico a la terminal de un usuario puede retomar ' +
+      'una sesion abandonada por dias sin necesidad de la contrasena. En un sistema que maneja ' +
+      'DUI y datos personales de ciudadanos, esto amplifica mucho el riesgo de cualquier descuido ' +
+      'operativo (computadora abandonada, mouse compartido, robo).',
+    file: 'src/auth/auth.service.ts (refresh) y src/auth/jwt-auth.guard.ts',
+    symbol: 'refreshToken() / canActivate()',
+    expected: 'El guard verifica `lastActivityAt` y rechaza si > 30 min',
+    received: 'El guard valida solo `exp` del JWT, sin tracking de inactividad',
+    howToFix:
+      '1. Agregar columna `lastActivityAt` a la tabla de sesiones (Prisma schema o equivalente).\n' +
+      '2. Cada vez que llega un request privado, actualizar `lastActivityAt = now()`.\n' +
+      '3. En el guard, ANTES de validar firma del JWT, verificar:\n' +
+      '   if ((now - session.lastActivityAt) > IDLE_TIMEOUT_MIN * 60_000) throw new UnauthorizedException(\'session idle\');\n' +
+      '4. Configurar IDLE_TIMEOUT_MIN = 30 en `.env`.\n' +
+      '5. En el endpoint /refresh, revocar la sesion si supero el idle.',
+    exampleCode:
+      'async canActivate(context: ExecutionContext): Promise<boolean> {\n' +
+      '  const req = context.switchToHttp().getRequest();\n' +
+      '  const session = await this.sessionRepo.findOne({ where: { token: req.headers.authorization } });\n' +
+      '  if (!session) throw new UnauthorizedException();\n' +
+      '  const idleMs = Date.now() - session.lastActivityAt.getTime();\n' +
+      '  if (idleMs > parseInt(process.env.IDLE_TIMEOUT_MIN ?? \'30\') * 60_000) {\n' +
+      '    await this.sessionRepo.update({ id: session.id }, { revokedAt: new Date() });\n' +
+      '    throw new UnauthorizedException(\'session idle\');\n' +
+      '  }\n' +
+      '  await this.sessionRepo.update({ id: session.id }, { lastActivityAt: new Date() });\n' +
+      '  return super.canActivate(context) as Promise<boolean>;\n' +
+      '}',
+    references: [
+      { title: 'GOES Checklist v2 R35' },
+      { title: 'OWASP Session Management Cheat Sheet', url: 'https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html' },
+      { title: 'NIST SP 800-63B 4.1.4 — Session timeouts', url: 'https://pages.nist.gov/800-63-3/sp800-63b.html' },
+    ],
+  });
+
   await allure.description(
     '## Vulnerability Prevented\n' +
-    '**Stale Session Hijack** — VULN-EXT-0005 del pentest del 27/05/2026:\n' +
+    '**Stale Session Hijack** — VULN-XXX-NNNN de pentests previos:\n' +
     'el refresh token tiene exp de 7 dias, pero NO hay control de inactividad.\n' +
     'Un atacante con acceso fisico a la terminal puede retomar una sesion\n' +
     'abandonada por dias sin re-autenticacion.\n\n' +
@@ -241,7 +288,7 @@ it('PENTEST R13/R35 — refresh token rotation MUST update lastActivityAt', asyn
   await allure.tag('Auth');
   await allure.tag('GOES Checklist R32');
   await allure.tag('GOES Checklist R35');
-  await allure.tag('Pentest Regression VULN-EXT-0005');
+  await allure.tag('Pentest Regression VULN-XXX-NNNN');
 
   let initialLastActivity: Date;
   let updatedLastActivity: Date;

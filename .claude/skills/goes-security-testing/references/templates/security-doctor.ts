@@ -135,6 +135,55 @@ checks.push({
 });
 
 // ============================================================
+// X. accepted_risks tienen campos completos + review_at vigente
+// ============================================================
+let arProblems: string[] = [];
+if (exists(SNAPSHOT_PATH)) {
+  try {
+    const snap = JSON.parse(read(SNAPSHOT_PATH));
+    const risks = Array.isArray(snap.accepted_risks) ? snap.accepted_risks : [];
+    const now = new Date();
+    for (const r of risks) {
+      const id = r.rid || '(sin rid)';
+      if (!r.reason || String(r.reason).trim().length < 20) {
+        arProblems.push(`${id}: razon ausente o demasiado corta (minimo 20 chars)`);
+      }
+      if (!r.approved_by || !String(r.approved_by).startsWith('@')) {
+        arProblems.push(`${id}: approved_by ausente o sin formato @user`);
+      }
+      if (!r.approved_at) {
+        arProblems.push(`${id}: approved_at ausente`);
+      }
+      if (!r.review_at) {
+        arProblems.push(`${id}: review_at ausente`);
+      } else {
+        const reviewDate = new Date(r.review_at);
+        if (isNaN(reviewDate.getTime())) {
+          arProblems.push(`${id}: review_at no es fecha valida ('${r.review_at}')`);
+        } else if (reviewDate < now) {
+          arProblems.push(`${id}: review_at vencido el ${r.review_at} — re-evaluar el riesgo`);
+        } else {
+          // Notificar si vence en proximos 30 dias
+          const daysToExpire = Math.floor((reviewDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          if (daysToExpire <= 30) {
+            arProblems.push(`${id}: review_at vence en ${daysToExpire} dias — programar review (no falla, pero recordar)`);
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // si el snapshot no parsea, ya lo reporta SNAPSHOT_VALID
+  }
+}
+checks.push({
+  id: 'ACCEPTED_RISKS',
+  description: 'accepted_risks completos y vigentes (reason + approved_by + review_at futuro)',
+  passed: arProblems.filter(p => !p.includes('no falla, pero recordar')).length === 0,
+  details: arProblems.length === 0 ? 'OK' : `${arProblems.length} problema(s)`,
+  missing: arProblems,
+});
+
+// ============================================================
 // 5. CI gate sin continue-on-error ni desactivaciones
 // ============================================================
 let gateProblems: string[] = [];

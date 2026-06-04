@@ -518,32 +518,140 @@ Items afectados por esta regla:
 - R61 (Storage outside webroot) — config (storage path) + aplicacion (multer.diskStorage destination o S3 client) + comportamiento (path no resuelve dentro de /public, /static, /dist)
 - R62 (Content-Disposition) — config (helmet/header middleware) + aplicacion (res.setHeader o @Header decorator en endpoint download) + comportamiento (E2E: GET /files/:id devuelve header `Content-Disposition: attachment`)
 - R63 (Malware scanning) — config (ClamAV / sandbox / lib instalada) + aplicacion (scanner invocado en pipeline antes de persistir) + comportamiento (rechazar payload con EICAR test string)
-- **R3, R4, R11, R20 — Response DTO sanitization** (regresion VULN-INT-0002, VULN-EXT-0002, VULN-EXT-0006) — config (ClassSerializerInterceptor global o response DTOs por controller) + aplicacion (decoradores `@Expose` explicitos en cada DTO) + comportamiento (E2E con `supertest`: la response de `/api/auth/me` NO contiene DUI completo, CUIDs Prisma, ni listas de permisos con IDs internos). Ver pattern 28.
-- **R11, R55 — Export controls** (regresion VULN-INT-0004) — config (DTO con `@IsDefined` + `@IsDateString` en filtros) + aplicacion (controller con `@UseGuards(RolesGuard)` + DTO obligatorio) + comportamiento (E2E: `POST /api/reports/permits` con `{"format":"xlsx"}` solo → 400; con filtros validos → max 1000 registros + audit log escrito). Ver pattern 29.
-- **R14, R55 — Captcha en endpoints publicos sensibles** (regresion VULN-EXT-0003) — config (RecaptchaModule importado + env var del secret) + aplicacion (`@UseGuards(RecaptchaGuard)` en cada metodo publico sensible) + comportamiento (E2E: request sin token → 400/403; con token falso → 400/403 tras validacion server-side). Lista canonica de endpoints en pattern 30.
+- **R3, R4, R11, R20 — Response DTO sanitization** — config (ClassSerializerInterceptor global o response DTOs por controller) + aplicacion (decoradores `@Expose` explicitos en cada DTO) + comportamiento (E2E con `supertest`: la response de `/api/auth/me` NO contiene DUI completo, CUIDs Prisma, ni listas de permisos con IDs internos). Ver pattern 28.
+- **R11, R55 — Export controls** — config (DTO con `@IsDefined` + `@IsDateString` en filtros) + aplicacion (controller con `@UseGuards(RolesGuard)` + DTO obligatorio) + comportamiento (E2E: `POST /api/reports/permits` con `{"format":"xlsx"}` solo → 400; con filtros validos → max 1000 registros + audit log escrito). Ver pattern 29.
+- **R14, R55 — Captcha en endpoints publicos sensibles** — config (RecaptchaModule importado + env var del secret) + aplicacion (`@UseGuards(RecaptchaGuard)` en cada metodo publico sensible) + comportamiento (E2E: request sin token → 400/403; con token falso → 400/403 tras validacion server-side). Lista canonica de endpoints en pattern 30.
 
 NUNCA poner un test de control de defensa en un spec de "config-only".
 Cada test de control va en el spec del controller/service donde se aplica.
 
-### Regla critica: falsos negativos canonicos del pentest del 27/05/2026
+### Regla critica: regresion de hallazgos por proyecto
 
-Estos 8 hallazgos del pentest **debieron ser atrapados por la skill y no lo fueron** porque los patterns existentes tenian assertions debiles o cobertura ausente. La skill ahora los cubre via patterns endurecidos (03, 11, 16) y patterns nuevos (28, 29, 30). Cada uno DEBE tener tag `Pentest Regression VULN-XXX-NNNN` y test obligatorio antes de marcar el item como verde:
+Cada proyecto mantiene su propio `pentest-history.yaml` con los hallazgos de
+SUS pentests. NO hay historial compartido entre proyectos.
 
-| VULN-ID | Hallazgo | Pattern que lo cubre | Tag de regresion |
-|---|---|---|---|
-| VULN-INT-0002 | `/api/auth/me` retorna roles + permisos con IDs internos | **28** (response DTO sanitization) | `Pentest Regression VULN-INT-0002` |
-| VULN-INT-0004 | Export reports sin filtros obligatorios | **29** (export controls) | `Pentest Regression VULN-INT-0004` |
-| VULN-INT-0009 | Cross-Origin-Resource-Policy: cross-origin en panel admin | **16** (security headers, test CORP/COOP) | `Pentest Regression VULN-INT-0009` |
-| VULN-EXT-0002 | DUI completo expuesto en `/api/auth/me` | **28** (response DTO sanitization) | `Pentest Regression VULN-EXT-0002` |
-| VULN-EXT-0003 | Sin reCAPTCHA en `verify-dui` | **30** (captcha public endpoints) | `Pentest Regression VULN-EXT-0003` |
-| VULN-EXT-0005 | Refresh token de 7 dias sin idle timeout | **11** (session — test idle timeout real con fake timers) | `Pentest Regression VULN-EXT-0005` |
-| VULN-EXT-0006 | CUID Prisma expuesto en responses | **28** (response DTO sanitization) | `Pentest Regression VULN-EXT-0006` |
-| VULN-EXT-0011 | CSP con `unsafe-inline` en estilos | **16** (security headers, asserts estrictos) | `Pentest Regression VULN-EXT-0011` |
-| VULN-EXT-0013 | `path` y `timestamp` en respuestas de error | **03** (error handling, asserts ampliados) | `Pentest Regression VULN-EXT-0013` |
+**Cuando la IA aplica la skill a un proyecto**:
 
-**Regla operativa**: cuando la skill genere tests para un proyecto NestJS GOES, los specs DEBEN incluir al menos un test con cada uno de estos tags. Si el proyecto bajo test no tiene la superficie correspondiente (ej. no expone `/api/auth/me` o no tiene endpoints de export), usar `t.notApplicable('motivo verificable con grep')` segun la regla de N/A vs hallazgo. **NO omitir el test** — el reporter HTML pierde la trazabilidad de regresion.
+1. Si el proyecto ya tiene `pentest-history.yaml`, lo respeta.
+2. Si no lo tiene, copia el template vacio desde
+   `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
+3. El YAML del proyecto vive en `test/security/pentest-history.yaml`
+   (recomendado) o en `.claude/skills/.../pentest-history.yaml` segun
+   prefiera el equipo. Se protege con CODEOWNERS.
 
-**Por que esto importa**: cuando ciberseguridad audite el proyecto, debe ver los 9 tags `Pentest Regression VULN-*` en el reporte HTML, todos en verde o N/A justificado. Si encuentran un hallazgo que ya estaba en esta lista, es un fallo de la skill. Si encuentran un hallazgo NUEVO (no listado aqui), se documenta y se agrega un nuevo tag de regresion en la proxima version de la skill.
+**Cuando llega un pentest nuevo para el proyecto**:
+
+1. Equipo del proyecto agrega entries al `pentest-history.yaml` siguiendo
+   la plantilla del archivo (esta documentada al final del YAML).
+2. Por cada entry crea `test/security/regression/<VULN-ID>.regression.spec.ts`
+   siguiendo `references/regression-template.md`.
+3. Cada test de regresion lleva su propio tag `Pentest Regression <VULN-ID>`
+   que aparece en el reporte HTML, en el panel "Pentest Regression".
+
+**Que NO hace la skill**:
+
+- NO trae historia precargada de otros proyectos.
+- NO comparte VULN-IDs entre proyectos. Si dos proyectos tienen un mismo
+  bug, ambos lo registran independientemente en sus YAMLs.
+- NO acumula doctrina de proyectos especificos en el repo central de la
+  skill. La skill provee el MECANISMO, los proyectos provee la HISTORIA.
+
+**Que SI hace la skill**:
+
+- Provee la plantilla del YAML con el schema documentado.
+- Provee `t.acceptedRiskIfDeclared(rid)` para que cada test consulte el
+  snapshot del proyecto.
+- Provee el reporter que renderiza los 4 estados (verde / rojo / amarillo
+  N/A / violeta riesgo aceptado).
+- Provee el doctor que valida la integridad del YAML del proyecto.
+
+---
+
+
+### Regla critica: 3 mecanismos distintos — N/A vs Riesgo Aceptado vs Hallazgo
+
+Antes de marcar nada, ubicar el caso correcto. **Confundir estos 3 lleva a falsos positivos en pentest y falsos negativos en la skill**.
+
+| Caso | Cuando aplicar | Como marcarlo | Como se ve en el reporte |
+|------|----------------|---------------|---------------------------|
+| **HALLAZGO** | La superficie existe Y la defensa esperada NO existe. Es un bug real. | El test FALLA con sus assertions. NO `t.notApplicable()`, NO `t.acceptedRiskIfDeclared()`. | ✗ rojo |
+| **N/A — sin superficie** | El proyecto NO tiene la feature que el item evalua. Ej. R57-R63 file upload en un backend sin uploads. | `t.notApplicable('motivo + comando grep verificable')` | ⊘ amarillo, badge "N/A" |
+| **RIESGO ACEPTADO — con superficie** | La feature EXISTE pero el contexto del proyecto (interno, VPN, audiencia limitada) cambia el perfil de riesgo y el equipo decide no implementar la defensa. | Declarar en `security.snapshot.json` -> `accepted_risks[]` con motivo + aprobador + fecha de re-evaluacion. El test llama `await t.acceptedRiskIfDeclared('R6')` y si esta en el snapshot retorna true y se marca como skipped violeta. | 🟪 violeta, badge "RIESGO ACEPTADO" + callout con razon y review_at |
+
+### Cuando usar cada uno (caso GOES)
+
+**Ejemplo 1 — Proyecto admin interno, no expuesto a Internet publico:**
+
+- R6 (robots.txt + sitemap.xml): la feature aplica (el sistema sirve contenido HTML), pero el dominio esta detras de VPN. No es indexable. → **Riesgo Aceptado**: agregar a `accepted_risks` con motivo "Panel admin solo via VPN, no indexable" y compensating_controls.
+- R57-R63 (file upload): si NO hay endpoints multipart/form-data, **N/A** con `grep -r "multer" src/` → 0 resultados.
+- R44 (CSP sin unsafe-inline): si el frontend usa libreria legacy que require unsafe-inline → **Riesgo Aceptado** con migracion planeada en compensating_controls.
+
+**Ejemplo 2 — Portal publico de cara a ciudadanos:**
+
+- R6: la feature aplica Y el dominio es publico → debe estar implementado → si falta, **Hallazgo** (rojo).
+- R57-R63: si hay uploads, **Hallazgo** si falta alguna defensa.
+- R44: NO permitir riesgo aceptado en CSP de portal publico. Si falta, **Hallazgo**.
+
+### Schema del accepted_risks en security.snapshot.json
+
+```json
+{
+  "project_profile": {
+    "type": "internal_admin",
+    "description": "Panel administrativo de uso interno (jefaturas)",
+    "exposure": "internal",
+    "audience": "GOES staff (~50 usuarios)",
+    "data_classification": "datos personales de ciudadanos"
+  },
+  "accepted_risks": [
+    {
+      "rid": "R6",
+      "title": "robots.txt + sitemap.xml",
+      "reason": "Panel admin no esta expuesto a Internet publico. No es indexable por buscadores. Acceso solo via VPN.",
+      "approved_by": "@gerardo-amaya-dev",
+      "approved_at": "2026-06-04",
+      "review_at": "2026-12-04",
+      "compensating_controls": [
+        "VPN obligatorio",
+        "Auth Keycloak con MFA",
+        "IP allowlist a nivel LB"
+      ]
+    }
+  ]
+}
+```
+
+Reglas para `accepted_risks`:
+
+1. **Cada entrada requiere los 5 campos**: `rid`, `reason` (>=20 chars), `approved_by` (handle GitHub), `approved_at`, `review_at`. El doctor falla si alguno falta.
+2. **review_at debe ser fecha futura**. Si vence, el doctor falla. Es decir: cada riesgo tiene fecha de re-evaluacion obligatoria.
+3. **30 dias antes de vencer**, el doctor emite un warning para que el equipo programe el review.
+4. **Modificar `accepted_risks` requiere PR + review de CODEOWNERS** (el file esta protegido por CODEOWNERS).
+5. **Por convenio, los `compensating_controls` deben listar al menos 1 medida** que mitiga parcialmente el riesgo aceptado.
+
+### Como lo usa el test
+
+```typescript
+it('R6 — robots.txt accessible o riesgo aceptado', async () => {
+  const t = report();
+  t.epic('Configuracion').feature('Public Site Config').story('robots.txt');
+  t.tag('GOES Checklist R6');
+
+  // PRIMERO: consultar si el proyecto declaro este riesgo como aceptado
+  if (await t.acceptedRiskIfDeclared('R6')) {
+    await t.flush();
+    return; // El test queda en violeta con el callout de riesgo aceptado
+  }
+
+  // Si NO esta aceptado, ejecutar las assertions reales
+  const res = await request(app.getHttpServer()).get('/robots.txt').expect(200);
+  expect(res.text).toContain('User-agent');
+  expect(res.text).not.toMatch(/disallow:\s*\/admin/);
+  await t.flush();
+});
+```
+
+---
 
 ### Regla critica: notApplicable vs hallazgo (NO confundir)
 
@@ -725,7 +833,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 
 | ID | Tarea | Epic | Feature sugerida | Severity |
 |----|-------|------|------------------|----------|
-| R8 | Mensajes 2xx, 4xx, 5xx genericos. **Body de error = `{statusCode, message}` exclusivamente** (sin `path`, `timestamp`, `stack`, `req.url` — regresion VULN-EXT-0013) | Seguridad | Generic Error Messages | critical |
+| R8 | Mensajes 2xx, 4xx, 5xx genericos. **Body de error = `{statusCode, message}` exclusivamente** (sin `path`, `timestamp`, `stack`, `req.url`) | Seguridad | Generic Error Messages | critical |
 | R9 | Validacion por rol o permiso dentro del servidor | Autenticacion | RBAC Enforcement | blocker |
 | R10 | Eliminar todo log visible por el usuario | Seguridad | Log Exposure Prevention | critical |
 | R11 | Validacion de tipo de datos via DTO, longitud de campo, max registros, **bloquear campos extras** (`forbidNonWhitelisted: true`); contrasenas: min 12 / max 32, sin reglas de complejidad arbitrarias | Dominio | DTO Validation / Input Constraints | critical |
@@ -735,7 +843,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | ID | Tarea | Epic | Feature sugerida | Severity |
 |----|-------|------|------------------|----------|
 | R13 | Tiempo de vida bajo para access token (5 min) y refresh token | Seguridad | Token Lifetime Enforcement | critical |
-| R14 | Auth failures: MFA, rate limit, session management, **+ captcha en endpoints publicos sensibles** (`verify-dui`, `register`, `forgot-password`, `recover-password`, `verify-email`, `contact`) — regresion VULN-EXT-0003 | Seguridad | Auth Failure Handling | blocker |
+| R14 | Auth failures: MFA, rate limit, session management, **+ captcha en endpoints publicos sensibles** (`verify-dui`, `register`, `forgot-password`, `recover-password`, `verify-email`, `contact`) | Seguridad | Auth Failure Handling | blocker |
 | R15 | Encriptacion bcrypt, Argon2 o PBKDF2 en hashing | Seguridad | Password Hashing Strength | blocker |
 | R16 | Uso de algoritmo RS256 para firma de tokens | Seguridad | JWT Signing Algorithm | blocker |
 | R17 | Session ID minimo 128 bits de entropia | Seguridad | Session ID Entropy | critical |
@@ -756,7 +864,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | R32 | Renovar refresh token despues de cada uso (rotacion) | Seguridad | Token Rotation | blocker |
 | R33 | Validar token en cada peticion privada | Autenticacion | Token Validation Per Request | blocker |
 | R34 | Implementar RBAC | Autenticacion | Role-Based Access Control | blocker |
-| R35 | Sistema de inactividad (timeout de sesion). **Idle timeout independiente del `exp` del JWT**: si no hay actividad en 30 min, sesion revocada server-side aunque el token siga vigente (regresion VULN-EXT-0005) | Seguridad | Session Inactivity Timeout | critical |
+| R35 | Sistema de inactividad (timeout de sesion). **Idle timeout independiente del `exp` del JWT**: si no hay actividad en 30 min, sesion revocada server-side aunque el token siga vigente | Seguridad | Session Inactivity Timeout | critical |
 
 ### CATEGORIA 4: Configuracion
 
@@ -769,7 +877,7 @@ El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
 | R41 | Access-Control-Max-Age: 3600 | Configuracion | CORS Preflight Cache | normal |
 | R42 | Cookies con HttpOnly, Secure, SameSite | Seguridad | Cookie Security Flags | blocker |
 | R43 | Debug mode deshabilitado | Configuracion | Debug Mode Disabled | critical |
-| R44 | Content-Security-Policy configurado **SIN `unsafe-inline`, `unsafe-eval`, `unsafe-hashes` ni wildcard `*`** en ninguna directiva (regresion VULN-EXT-0011) | Configuracion | CSP Header | critical |
+| R44 | Content-Security-Policy configurado **SIN `unsafe-inline`, `unsafe-eval`, `unsafe-hashes` ni wildcard `*`** en ninguna directiva | Configuracion | CSP Header | critical |
 | R45 | X-Content-Type-Options nosniff, X-Frame-Options DENY | Configuracion | Security Headers (XCT, XFO) | critical |
 | R46 | Strict-Transport-Security (HSTS) | Configuracion | HSTS Header | critical |
 | R47 | X-XSS-Protection 0 (deprecado, usar CSP) | Configuracion | XSS Protection Header | normal |
@@ -955,8 +1063,7 @@ puede:
 
 | Tag en el reporte | Significa |
 |---|---|
-| `Pentest Regression VULN-INT-NNNN` | Hallazgo historico del panel interno |
-| `Pentest Regression VULN-EXT-NNNN` | Hallazgo historico del portal externo |
+| `Pentest Regression VULN-XXX-NNNN` | Hallazgo historico del proyecto (registrado en su pentest-history.yaml) |
 | Verde sin N/A | Defensa verificada activamente |
 | Amarillo N/A "endpoint no existe" | Superficie ausente en este proyecto |
 | Amarillo N/A "Riesgo aceptado segun ADR-NN" | Decision de negocio documentada |
@@ -1009,15 +1116,175 @@ corre en cada PR y reporta drift contra el snapshot aprobado.
    ciberseguridad para cualquier modificacion al snapshot, a los referencias
    de la skill, o al workflow del gate.
 5. Configurar en el repo de GitHub:
-   - Settings -> Actions -> Variables: `RELEASE_BASE_URL` con la URL del
-     ambiente release/staging.
-   - Settings -> Secrets: `SECURITY_TEST_USER` y `SECURITY_TEST_PASSWORD`
-     con credenciales de un usuario de prueba con rol minimo.
-   - Settings -> Branches -> Branch protection rule en `main`/`master`:
-     - Require status checks to pass before merging
-     - Status checks required: `Security tests (local build)`,
-       `Checklist GOES coverage gate`, y opcionalmente
-       `Security tests (release env)`.
+
+### 5.a Variables y secrets (una vez por repo)
+
+**Settings -> Secrets and variables -> Actions -> Variables:**
+   - `RELEASE_BASE_URL` con la URL del ambiente release/uat/main.
+
+**Settings -> Secrets and variables -> Actions -> Secrets:**
+   - `SECURITY_TEST_USER` y `SECURITY_TEST_PASSWORD`: credenciales de un
+     usuario de prueba con rol minimo (lo usa el job security-tests-release).
+
+**Para envio de reporte PDF por correo al lider de desarrollo:**
+
+El workflow incluye un step que, tras cada merge a una rama protegida,
+genera un PDF del reporte HTML y lo envia por correo al lider de desarrollo
+(`ludwing.serapio@goes.gob.sv` por defecto, configurable en el workflow).
+
+Secrets requeridos:
+   - `SMTP_HOST`     — servidor SMTP institucional. Ejemplos:
+                       - Microsoft 365: `smtp.office365.com`
+                       - Google Workspace: `smtp.gmail.com`
+                       - GOES interno: ajustar segun infra
+   - `SMTP_USER`     — cuenta de envio (ej. `no-reply@goes.gob.sv`)
+   - `SMTP_PASSWORD` — password (o App Password si la cuenta usa MFA)
+   - `SMTP_PORT`     — opcional, default 587 (TLS); usar 465 para SSL
+   - `SMTP_SECURE`   — opcional, default `false`; setear `true` si el server requiere SSL directo
+   - `SMTP_FROM`     — opcional, default = SMTP_USER; ej. `noreply@goes.gob.sv`
+
+Si los secrets SMTP_* no estan configurados, el step de email simplemente
+falla silenciosamente y el resto del workflow continua. El PDF queda
+disponible como artifact (`security-report-pdf`) descargable manualmente.
+
+**Para cambiar el destinatario o agregar mas:**
+
+Editar `.github/workflows/security-gate.yml`, step "Enviar reporte PDF por
+correo al lider de desarrollo", campo `to:`. Soporta multiples destinatarios
+separados por coma:
+
+```yaml
+to: ludwing.serapio@goes.gob.sv,otro.lider@goes.gob.sv
+```
+
+**Cuando se envia el correo:**
+
+- Solo en eventos `push` a las ramas protegidas (`dev`, `qa`, `uat`, `main`).
+- NO se envia en cada actualizacion de PR (seria spam).
+- Es decir: cada vez que un PR se mergea, el lider recibe un correo con
+  el estado de seguridad del proyecto post-merge.
+
+### 5.b CODEOWNERS catch-all (ya esta en CODEOWNERS.example)
+   Confirmar que `.github/CODEOWNERS` tiene la regla `*` al inicio. Esto
+   hace que GitHub auto-solicite review de un CODEOWNER en CADA PR:
+
+   ```
+   *   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
+   ```
+
+### 5.c Branch protection rule (sin bypass — flujo unico rojo->violeta)
+
+Settings -> Branches -> Add rule. Crear UNA regla por rama (`dev`, `qa`,
+`uat`, `main`):
+
+   - [x] **Require a pull request before merging**
+       - [x] **Required approving reviews: 1**
+           ← solo 1 CODEOWNER aprueba = merge habilitado
+       - [x] **Require review from Code Owners**
+       - [x] **Dismiss stale pull request approvals when new commits are pushed**
+
+   - [x] **Require status checks to pass before merging**
+       - [x] **Require branches to be up to date before merging**
+       - Status checks required (en las 4 ramas):
+         - `Verify gate integrity`
+         - `Security tests (local build)`
+         - `Checklist GOES coverage gate`
+         - `Security doctor (skill compliance)`
+         - En `uat` y `main`: `Security tests (release env)`
+
+   - [x] **Require conversation resolution before merging**
+
+   - [x] **Do not allow bypassing the above settings**
+       ← MARCAR. Nadie (ni admins) puede mergear con checks en rojo.
+          La unica forma de "aceptar" un rojo es convertirlo a riesgo
+          aceptado en el snapshot (ver 5.e).
+
+   - **Allow specified actors to bypass required pull requests**:
+       DEJAR VACIO. No hay bypass autorizado.
+
+   - [x] **Restrict who can push to matching branches**
+       - Permitir solo a los CODEOWNERS y a los GitHub Actions bots.
+
+### 5.d Comportamiento resultante (sin excepciones)
+
+| Persona | Checks verdes (incluye violeta y N/A) | Checks con rojos |
+|---------|----------------------------------------|--------------------|
+| Dev normal | 1 approval CODEOWNER -> merge habilitado | Boton gris, NO puede mergear |
+| CODEOWNER  | 1 approval -> merge habilitado | Boton gris, NO puede mergear (igual que dev) |
+| Admin del repo | Igual que CODEOWNER | Boton gris (Do not allow bypassing = checked) |
+
+### 5.e Flujo correcto para items que aparecen rojos en proyectos donde NO aplican
+
+Cuando un dev abre un PR y un test sale rojo porque el item NO aplica a
+este proyecto (ej. R6 robots.txt en un panel admin interno via VPN), el
+flujo es:
+
+1. **En el MISMO PR**, el dev agrega 2 cambios:
+
+   a) En `test/security/security.snapshot.json`, dentro de `accepted_risks[]`:
+      ```json
+      {
+        "rid": "R6",
+        "reason": "Panel admin no expuesto a Internet. Solo via VPN. No indexable.",
+        "approved_by": "@gerardo-amaya-dev",
+        "approved_at": "2026-06-04",
+        "review_at": "2026-12-04",
+        "compensating_controls": ["VPN obligatorio", "Auth Keycloak con MFA", "IP allowlist a nivel LB"]
+      }
+      ```
+
+   b) Al inicio del test correspondiente:
+      ```typescript
+      if (await t.acceptedRiskIfDeclared('R6')) {
+        await t.flush();
+        return;
+      }
+      ```
+
+2. **Push al PR**. El workflow re-corre. R6 ahora sale violeta "RIESGO ACEPTADO".
+
+3. **GitHub solicita CODEOWNERS review automaticamente** (porque tocamos
+   snapshot.json, que esta protegido). Los CODEOWNERS evaluan:
+   - ¿La razon es razonable?
+   - ¿Los compensating_controls realmente mitigan?
+   - ¿review_at es un plazo razonable?
+
+4. **Si CODEOWNER aprueba**, todos los checks pasan (verde / violeta / N/A
+   son todos "OK" para el gate), 1 review esta, branch up to date -> merge
+   habilitado.
+
+5. **A partir de ese merge**, R6 sale violeta en TODAS las ejecuciones
+   futuras hasta que `review_at` venza. Cuando vence, el equipo abre un PR
+   que renueva o quita la entrada — mismo flujo de review.
+
+### 5.f Por que esto es mejor que el bypass
+
+| | Bypass al momento del merge | Flujo rojo->violeta |
+|---|----------------------------|----------------------|
+| Decision visible | Solo en la conversacion del PR | En el JSON, queda persistente |
+| Trazabilidad | Issue auto-abierto post-merge | En git blame del snapshot |
+| Reproducibilidad | Cada PR es un caso aislado | La decision aplica a TODAS las corridas futuras |
+| Re-evaluacion | No hay mecanismo | review_at obligatorio + warning a 30 dias |
+| Riesgo de error | "Approve y olvidar" | El cambio al snapshot tiene CODEOWNERS review obligatorio |
+
+**Resultado**: el "rojo mergeado" no existe en el historial del repo.
+Solo hay tests verdes, violetas (riesgo aceptado documentado) o amarillos
+(N/A justificado con grep). Cualquier auditor puede revisar `accepted_risks`
+en el snapshot y entender el contexto de seguridad del proyecto.
+
+### 5.d Notificaciones por correo a los CODEOWNERS
+   GitHub auto-envia un correo a cada CODEOWNER cuando se le solicita
+   review (esto pasa al abrir el PR o cuando el PR toca un archivo
+   matcheado por su regla en CODEOWNERS). Cada usuario controla la
+   recepcion en https://github.com/settings/notifications:
+   - [x] Watching: Email
+   - [x] Participating: Email
+   - Categoria "Pull request reviews requested" debe estar en Email.
+
+   No hace falta SMTP custom — GitHub se encarga. Si por compliance se
+   requiere un correo adicional via SMTP institucional (no@goes.gob.sv),
+   se puede agregar un step `dawidd6/action-send-mail` al final del job
+   `security-tests-local`. Documentado pero no incluido por defecto.
 
 ### 7.4 Resultado
 

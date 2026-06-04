@@ -1,19 +1,36 @@
-# Agregar al .github/CODEOWNERS del proyecto.
-# Cualquier cambio a estos archivos requiere aprobacion de TODOS los listados
-# (GitHub pide review a cada uno; con branch protection "Require review from
-# Code Owners" activado, el merge queda bloqueado hasta que aprueben).
+# .github/CODEOWNERS — generado por skill goes-security-testing.
 #
-# Para reducir la lista de aprobadores requeridos a 1 (en vez de todos),
-# crear un team en GitHub y reemplazar los usuarios por @goes-tools/<team>.
+# Reglas de propiedad sobre archivos. GitHub usa esto en combinacion con
+# branch protection ("Require review from Code Owners") para forzar que un
+# CODEOWNER apruebe el PR antes de mergear.
+#
+# Si el patron del archivo modificado matchea una linea, GitHub auto-solicita
+# review de los usuarios listados.
 
-# Snapshot de seguridad — cualquiera de los siguientes puede aprobar
-/test/security/security.snapshot.json   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+# ────────────────────────────────────────────────────────────────────
+# Catch-all: TODA modificacion al repo requiere review de al menos 1
+# CODEOWNER. Es la regla que garantiza el "1 approval = merge".
+# ────────────────────────────────────────────────────────────────────
+*   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
 
-# Configuracion de skill — cualquiera de los siguientes puede aprobar
-/.claude/skills/goes-security-testing/  @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+# ────────────────────────────────────────────────────────────────────
+# Archivos sensibles de seguridad. Las reglas mas especificas
+# OVERRIDE a la regla *, asi que estos archivos siguen requiriendo a los
+# mismos 5 devs (ya estan listados arriba, pero los repetimos por claridad
+# y para documentar la intencion).
+# ────────────────────────────────────────────────────────────────────
 
-# CI gate de seguridad — cualquiera de los siguientes puede aprobar
-/.github/workflows/security-gate.yml    @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+# Snapshot de configuracion runtime aprobado por el equipo
+/test/security/security.snapshot.json   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
 
-# pentest-history.yaml — cualquiera de los siguientes puede aprobar
-/.claude/skills/goes-security-testing/references/pentest-history.yaml   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-corte-dev
+# Skill — doctrina, patterns, YAML de pentest, reporter
+/.claude/skills/goes-security-testing/  @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
+
+# Manifiesto de hallazgos historicos
+/.claude/skills/goes-security-testing/references/pentest-history.yaml   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
+
+# CI gate de seguridad
+/.github/workflows/security-gate.yml    @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
+
+# El propio CODEOWNERS
+/.github/CODEOWNERS                     @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev

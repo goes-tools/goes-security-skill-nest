@@ -111,6 +111,7 @@ class SecurityHtmlReporter {
           steps: metadata?.steps || [],
           evidences: metadata?.evidences || [],
           naReason: naReason,
+          remediation: metadata?.remediation,
         };
 
         mergedTests.push(merged);
@@ -872,6 +873,288 @@ class SecurityHtmlReporter {
     .checklist-cell.fail    { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #f87171; }
     .checklist-cell.na      { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
     .checklist-cell.missing { background: #1f2937; border-color: #2a3a4a; color: #6b7280; }
+
+    /* ============================================================
+       Remediation block (modal — Como arreglar)
+       ============================================================ */
+
+    /* v2.0 — Plain-language explanation blocks */
+
+    .remediation-summary {
+      padding: 14px 16px;
+      background: rgba(6, 182, 212, 0.08);
+      border-left: 4px solid #06b6d4;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #c8d0d8;
+    }
+    .remediation-summary-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #67e8f9;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .remediation-check {
+      padding: 12px 14px;
+      background: rgba(148, 163, 184, 0.05);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    .remediation-check-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .remediation-check ol {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      counter-reset: step;
+    }
+    .remediation-check li {
+      counter-increment: step;
+      padding: 6px 0 6px 32px;
+      position: relative;
+      font-size: 13px;
+      color: #c8d0d8;
+      line-height: 1.5;
+    }
+    .remediation-check li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 6px;
+      width: 22px;
+      height: 22px;
+      background: #1e3a5f;
+      color: #93c5fd;
+      border-radius: 50%;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .remediation-impact {
+      padding: 12px 14px;
+      background: rgba(239, 68, 68, 0.07);
+      border-left: 4px solid #ef4444;
+      border-radius: 6px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #fca5a5;
+    }
+    .remediation-impact-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #f87171;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .remediation-section-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #2a3a4a, transparent);
+      margin: 14px 0;
+    }
+
+    .remediation-block {
+      margin: 0 0 18px 0;
+      background: linear-gradient(135deg, #1f1a0f, #1f150a);
+      border: 1px solid #f59e0b;
+      border-left: 4px solid #f59e0b;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.1);
+    }
+
+    .remediation-block.passed { display: none; }
+
+    .remediation-header {
+      padding: 10px 16px;
+      background: rgba(245, 158, 11, 0.12);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.25);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fbbf24;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .remediation-header svg { flex-shrink: 0; }
+
+    .remediation-body { padding: 14px 16px; }
+
+    .remediation-file-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: #0f1923;
+      border-radius: 5px;
+      margin-bottom: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: #c8d0d8;
+    }
+    .remediation-file-row .file-icon { color: #f59e0b; }
+    .remediation-file-row .line-pill {
+      background: #1e3a5f;
+      color: #93c5fd;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .remediation-file-row .symbol {
+      color: #94a3b8;
+      font-style: italic;
+    }
+
+    .remediation-diff {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 720px) { .remediation-diff { grid-template-columns: 1fr; } }
+
+    .remediation-diff-cell {
+      padding: 10px 12px;
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .remediation-diff-cell.expected {
+      background: rgba(34, 197, 94, 0.08);
+      border: 1px solid rgba(34, 197, 94, 0.3);
+      color: #86efac;
+    }
+    .remediation-diff-cell.received {
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+    .remediation-diff-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      opacity: 0.8;
+    }
+
+    .remediation-fix {
+      padding: 12px 14px;
+      background: rgba(34, 197, 94, 0.07);
+      border-left: 3px solid #22c55e;
+      border-radius: 4px;
+      color: #d1fae5;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+    }
+    .remediation-fix-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #4ade80;
+      margin-bottom: 6px;
+    }
+
+    .remediation-example {
+      padding: 10px 12px;
+      background: #0f1923;
+      border-radius: 5px;
+      color: #c8d0d8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+      white-space: pre;
+    }
+    .remediation-example-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #93c5fd;
+      margin-bottom: 6px;
+    }
+
+    .remediation-refs {
+      font-size: 12px;
+      color: #94a3b8;
+    }
+    .remediation-refs ul {
+      list-style: disc;
+      padding-left: 18px;
+      margin: 4px 0 0 0;
+    }
+    .remediation-refs li { margin: 2px 0; }
+    .remediation-refs a {
+      color: #93c5fd;
+      text-decoration: none;
+    }
+    .remediation-refs a:hover { text-decoration: underline; }
+
+    /* ============================================================
+       Failure diff (de Jest, si no hay remediation custom)
+       ============================================================ */
+    .failure-diff-block {
+      margin: 0 0 18px 0;
+      background: rgba(239, 68, 68, 0.05);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-left: 4px solid #ef4444;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .failure-diff-block .diff-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #fca5a5;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .failure-diff-block pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      color: #e8e8e8;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 280px;
+      overflow-y: auto;
+      margin: 0;
+    }
 
     /* ============================================================
        Footer
@@ -2794,7 +3077,9 @@ class SecurityHtmlReporter {
         skipped: '#94a3b8',
       }[test.status];
 
-      const headerSeverityBadge = test.naReason
+      const headerSeverityBadge = test.acceptedRisk
+        ? \`<span class="badge-accepted-risk">RIESGO ACEPTADO</span>\`
+        : test.naReason
         ? \`<span class="badge badge-na">N/A</span>\`
         : test.severity
           ? \`<span class="badge badge-severity badge-\${test.severity}">\${sevLabel(test.severity)}</span>\`
@@ -2835,6 +3120,132 @@ class SecurityHtmlReporter {
             </div>
           </div>
       \`;
+
+      // ============================================================
+      // v2.0 — Remediation block (Como arreglar)
+      // ============================================================
+      if (test.remediation && test.status === 'failed') {
+        const rem = test.remediation;
+        let remHtml = '<div class="remediation-block">' +
+          '<div class="remediation-header">' +
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+              '<path d="M12 2L2 22h20L12 2z"/><line x1="12" y1="9" x2="12" y2="14"/><line x1="12" y1="18" x2="12.01" y2="18"/>' +
+            '</svg>' +
+            'Como arreglar este hallazgo' +
+          '</div>' +
+          '<div class="remediation-body">';
+
+        // v2.0 — Plain language blocks (orden: que paso → como verificamos → por que importa → detalle tecnico)
+
+        if (rem.summary) {
+          remHtml += '<div class="remediation-summary">' +
+            '<div class="remediation-summary-label">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>' +
+              '</svg>' +
+              'Que paso' +
+            '</div>' +
+            escapeHtml(rem.summary) +
+          '</div>';
+        }
+
+        if (Array.isArray(rem.howWeChecked) && rem.howWeChecked.length > 0) {
+          remHtml += '<div class="remediation-check">' +
+            '<div class="remediation-check-label">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+              '</svg>' +
+              'Como lo verificamos' +
+            '</div>' +
+            '<ol>';
+          for (const step of rem.howWeChecked) {
+            remHtml += '<li>' + escapeHtml(step) + '</li>';
+          }
+          remHtml += '</ol></div>';
+        }
+
+        if (rem.whyItMatters) {
+          remHtml += '<div class="remediation-impact">' +
+            '<div class="remediation-impact-label">' +
+              '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M12 2L2 22h20L12 2z"/><line x1="12" y1="9" x2="12" y2="14"/><line x1="12" y1="18" x2="12.01" y2="18"/>' +
+              '</svg>' +
+              'Por que importa' +
+            '</div>' +
+            escapeHtml(rem.whyItMatters) +
+          '</div>';
+        }
+
+        // Separador entre lenguaje plano y detalle tecnico
+        if (rem.summary || rem.howWeChecked || rem.whyItMatters) {
+          if (rem.file || rem.expected || rem.received || rem.howToFix) {
+            remHtml += '<div class="remediation-section-divider"></div>';
+          }
+        }
+
+        if (rem.file) {
+          remHtml += '<div class="remediation-file-row">' +
+            '<span class="file-icon">📁</span>' +
+            '<span>' + escapeHtml(rem.file) + '</span>';
+          if (rem.line) remHtml += '<span class="line-pill">linea ' + escapeHtml(String(rem.line)) + '</span>';
+          if (rem.symbol) remHtml += '<span class="symbol">' + escapeHtml(rem.symbol) + '</span>';
+          remHtml += '</div>';
+        }
+
+        if (rem.expected || rem.received) {
+          remHtml += '<div class="remediation-diff">';
+          if (rem.expected) {
+            remHtml += '<div class="remediation-diff-cell expected">' +
+              '<div class="remediation-diff-label">✓ Esperado</div>' +
+              escapeHtml(rem.expected) +
+            '</div>';
+          }
+          if (rem.received) {
+            remHtml += '<div class="remediation-diff-cell received">' +
+              '<div class="remediation-diff-label">✗ Encontrado</div>' +
+              escapeHtml(rem.received) +
+            '</div>';
+          }
+          remHtml += '</div>';
+        }
+
+        if (rem.howToFix) {
+          remHtml += '<div class="remediation-fix">' +
+            '<div class="remediation-fix-label">Pasos para arreglar</div>' +
+            escapeHtml(rem.howToFix) +
+          '</div>';
+        }
+
+        if (rem.exampleCode) {
+          remHtml += '<div>' +
+            '<div class="remediation-example-label">Ejemplo de codigo correcto</div>' +
+            '<div class="remediation-example">' + escapeHtml(rem.exampleCode) + '</div>' +
+          '</div>';
+        }
+
+        if (rem.references && rem.references.length > 0) {
+          remHtml += '<div class="remediation-refs"><strong>Referencias:</strong><ul>';
+          for (const ref of rem.references) {
+            if (ref.url) {
+              remHtml += '<li><a href="' + escapeHtml(ref.url) + '" target="_blank" rel="noopener">' + escapeHtml(ref.title) + '</a></li>';
+            } else {
+              remHtml += '<li>' + escapeHtml(ref.title) + '</li>';
+            }
+          }
+          remHtml += '</ul></div>';
+        }
+
+        remHtml += '</div></div>';
+        content += remHtml;
+      }
+
+      // v2.0 — Si test fallo pero no tiene remediation custom, mostrar el diff crudo de Jest
+      if (!test.remediation && test.status === 'failed' && test.errors && test.errors.length > 0) {
+        content += '<div class="failure-diff-block">' +
+          '<div class="diff-label">⚠ Mensaje de fallo (raw)</div>' +
+          '<pre>' + escapeHtml(test.errors.join('\\n\\n')) + '</pre>' +
+        '</div>';
+      }
 
       if (test.naReason) {
         content += \`
