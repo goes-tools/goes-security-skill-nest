@@ -21,7 +21,7 @@ The reporter reads the project name in this order of precedence:
 3. Fallback string `Security Report`.
 
 ```typescript
-// test/security/jest-security-html.config.ts
+// test/security/security.config.ts
 import type { Config } from 'jest';
 import * as path from 'path';
 

@@ -88,7 +88,27 @@ class SecurityHtmlReporter {
   async onRunComplete(testContexts, results) {
     const normalizedTests = [];
     for (const testResult of results.testResults) {
-      for (const assertion of testResult.testResults) {
+      const assertions = testResult.testResults || [];
+      // A spec that fails to compile/import has no assertions but a
+      // testExecError. Surface it as a RED test so the spec never vanishes
+      // silently from a security report.
+      if (assertions.length === 0 && (testResult.testExecError || testResult.failureMessage)) {
+        const err = testResult.testExecError;
+        normalizedTests.push({
+          testFilePath: testResult.testFilePath,
+          title: '(archivo de test no se pudo cargar)',
+          fullName: '(archivo de test no se pudo cargar)',
+          status: 'failed',
+          duration: 0,
+          failureMessages: [
+            (err && (err.stack || err.message)) ||
+              testResult.failureMessage ||
+              'El archivo de test fallo al cargar.',
+          ],
+        });
+        continue;
+      }
+      for (const assertion of assertions) {
         normalizedTests.push({
           testFilePath: testResult.testFilePath,
           title: assertion.title,
@@ -125,7 +145,23 @@ class SecurityHtmlReporter {
     let durationMs = 0;
     for (const file of files || []) {
       const filepath = file.filepath || file.name || '';
+      const before = normalizedTests.length;
       SecurityHtmlReporter.walkVitestTasks(file.tasks, filepath, normalizedTests);
+      // A spec that fails to collect (import/compile error) yields no tasks but
+      // a failed file result. Surface it as a RED test so it never vanishes.
+      if (normalizedTests.length === before && file.result && file.result.state === 'fail') {
+        const errs = (file.result.errors || []).map((e) =>
+          !e ? String(e) : (e.stack || e.message || String(e)),
+        );
+        normalizedTests.push({
+          testFilePath: filepath,
+          title: '(archivo de test no se pudo cargar)',
+          fullName: '(archivo de test no se pudo cargar)',
+          status: 'failed',
+          duration: 0,
+          failureMessages: errs.length ? errs : ['El archivo de test fallo al cargar.'],
+        });
+      }
       if (file.result && file.result.duration) {
         durationMs += file.result.duration;
       }
@@ -204,9 +240,11 @@ class SecurityHtmlReporter {
 
     // Merge test results with metadata
     const mergedTests = [];
+    let matchedCount = 0;
     for (const tr of normalizedTests) {
       const key = SecurityHtmlReporter.makeKey(tr.testFilePath, tr.fullName);
       const metadata = metadataMap.get(key);
+      if (metadata) matchedCount++;
 
       // Not Applicable override: tests that call t.notApplicable(reason)
       // are reported as "skipped" regardless of whether their assertions
@@ -242,6 +280,17 @@ class SecurityHtmlReporter {
         naReason: naReason,
         remediation: metadata?.remediation,
       });
+    }
+
+    // Diagnostic: tests ran but none matched metadata → report renders without
+    // epic/feature/evidence/tags. Most common causes: (Vitest) missing
+    // globals:true in the security config, or a test not calling await t.flush().
+    if (mergedTests.length > 0 && matchedCount === 0) {
+      console.warn(
+        '\n⚠ Security Reporter: 0 tests cruzaron con metadata. El reporte saldra ' +
+          'sin epic/feature/evidencia/tags.\n  Revisar: (Vitest) globals:true en el ' +
+          'config de seguridad; o que cada test llame await t.flush().',
+      );
     }
 
     // Build summary — recount from merged tests so naReason overrides are

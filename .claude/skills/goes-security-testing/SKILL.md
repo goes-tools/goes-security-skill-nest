@@ -1,6 +1,6 @@
 ---
 name: goes-security-testing
-description: "Genera tests de seguridad para proyectos NestJS con un Custom HTML Reporter (sin Java ni Allure), cubriendo el Checklist de Ciberseguridad GOES (57 items), OWASP Top 10 y OWASP API Security Top 10. Runner-agnostic: se adapta al test runner ya configurado en el proyecto (Jest o Vitest) sin imponer ninguno. Produce specs con evidencia JSON, trazabilidad regulatoria, regresión de pentest y un reporte HTML autocontenido (sidebar Epic-Feature-Story, matriz de checklist, charts SVG, tema oscuro, búsqueda, export PDF). Activar cuando el usuario pida: tests de seguridad, checklist GOES, pentest tests, security specs, reporte de seguridad HTML, security report, o variantes."
+description: "Tests de seguridad para NestJS con reporte HTML autocontenido (sin Java ni Allure): Checklist de Ciberseguridad GOES (57 items), OWASP Top 10 y OWASP API Security Top 10, evidencia JSON y regresión de pentest. Runner-agnostic: detecta y usa el runner del proyecto (Jest o Vitest) sin imponer ninguno. Activar cuando el usuario pida: tests de seguridad, checklist GOES, pentest tests, security specs, reporte de seguridad HTML, security report, o variantes."
 ---
 
 # GOES Security Testing — NestJS + (Jest|Vitest) + Custom HTML Reporter
@@ -26,7 +26,8 @@ Este SKILL.md es el índice del flujo. El detalle vive en `references/` y se lee
 | Decidir Hallazgo vs N/A vs Riesgo Aceptado, schema accepted_risks, 3 capas | `references/decision-rules.md` |
 | Checklist completo R3-R63 + OWASP + Guía GOES | `references/goes-checklist.md` |
 | CI gate, snapshot, branch protection, CODEOWNERS, SMTP | `references/ci-gate-setup.md` |
-| Patrón concreto de un tipo de test | `references/test-patterns/NN-*.md` |
+| Qué patrón usar para un item (item → archivo) | `references/test-patterns/INDEX.md` |
+| Patrón concreto de un tipo de test | `references/test-patterns/NN-*.md` (ver INDEX primero) |
 | Regresión de pentest | `references/regression-template.md` + `references/pentest-history.yaml` |
 
 No copies estos archivos al proyecto salvo donde se indique (templates/examples).
@@ -68,8 +69,8 @@ Leer `references/runner-setup.md`. Resumen:
    `test:` → Vitest; `jest.config.*`/`jest-e2e.json` → Jest; `.mocharc*` → Mocha;
    `jasmine.json`/`@types/jasmine` → Jasmine) y los imports de los specs existentes.
 2. Decidir según lo detectado:
-   - **Jest** → `jest-security-html.config.ts`. No instalar otro runner.
-   - **Vitest** → `vitest-security.config.ts`. No instalar otro runner.
+   - **Jest** → `security.config.ts`. No instalar otro runner.
+   - **Vitest** → `security.config.ts`. No instalar otro runner.
    - **Ambos Jest y Vitest** → usar el del script `test`; si es ambiguo, **preguntar**.
    - **Otro runner (Mocha, Jasmine, AVA…)** → la suite de seguridad NO corre sobre
      ellos. **Avisar** al usuario: *"Detecté <runner>. La suite de seguridad GOES
@@ -82,9 +83,15 @@ Leer `references/runner-setup.md`. Resumen:
 3. **Nunca** instalar Jest en un proyecto Vitest ni viceversa. Cuando haya que
    elegir (otro runner / ninguno), usar `AskUserQuestion` con exactamente dos
    opciones: **Jest** y **Vitest**. No ofrecer un tercero.
+4. **Compatibilidad de versiones:** verificar la versión del runner contra la
+   matriz soportada (`runner-setup.md`). Si está fuera de rango (ej. Vitest 4,
+   Jest 27, Node 16): **notificar**, **proponer** una versión compatible acotada
+   a la suite de seguridad, y **preguntar** al usuario (ajustar / entorno aparte /
+   continuar igual). Nunca degradar o actualizar deps del proyecto sin su OK.
 
 La suite de seguridad siempre vive en un config **aislado** bajo `test/security/`
-que no toca el config del proyecto.
+(`security.config.ts`, `security.setup.ts`, `security-release.config.ts`) que no
+toca el config del proyecto.
 
 ---
 
@@ -165,7 +172,7 @@ override para `**/*.spec.ts` y `test/**/*.ts` desactivando reglas `no-unsafe-*` 
 
 Por cada servicio/controller, crear un `.security-html.spec.ts`. Los specs son
 **idénticos en Jest y Vitest** (usan `describe/it/expect` + `report()`). Para
-mocks usar `jest.fn()`: en el camino Vitest, el setup `vitest-security.setup.ts`
+mocks usar `jest.fn()`: en el camino Vitest, el setup `security.setup.ts`
 aliasa `jest → vi` para que el mismo spec corra sin cambios (ver `runner-setup.md`).
 
 ### Estructura de cada test (patrón report())
@@ -276,7 +283,7 @@ ESM sin flags) — instalarlo si el proyecto no tiene ya `ts-node`. Script:
 
 ```bash
 npm run test:security:html    # suite completa
-npm run security:doctor       # auditoría estructural (7 checks)
+npm run security:doctor       # auditoría estructural
 ```
 
 Ambos deben salir con código 0. **NO emitir "skill aplicada con éxito" si el

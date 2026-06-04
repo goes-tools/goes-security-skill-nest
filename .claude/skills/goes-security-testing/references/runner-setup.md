@@ -44,8 +44,8 @@ Recolectar señales en este orden y clasificar:
 
 | Señales encontradas | Acción |
 |---|---|
-| Solo Vitest | **Vitest** (`vitest-security.config.ts`). No instalar otro runner. |
-| Solo Jest | **Jest** (`jest-security-html.config.ts`). No instalar otro runner. |
+| Solo Vitest | **Vitest** (`security.config.ts`). No instalar otro runner. |
+| Solo Jest | **Jest** (`security.config.ts`). No instalar otro runner. |
 | Ambos Jest y Vitest | El del script `test` principal; si es ambiguo, **preguntar**. |
 | Otro runner (Mocha, Jasmine, AVA…) | **Avisar** que la suite de seguridad NO corre sobre ellos y que se creará un config **aislado** que no toca su runner. **Preguntar** Jest o Vitest (solo uno) e instalar ese runner solo para la suite de seguridad. |
 | Ninguno configurado | **Avisar** que no hay sistema de pruebas y que se instalará uno. **Preguntar** Jest o Vitest (solo uno de esos dos) e instalarlo. |
@@ -70,6 +70,41 @@ ninguno), usar `AskUserQuestion` con **exactamente dos opciones: Jest y Vitest**
 
 ---
 
+## Compatibilidad de versiones (detectar antes de integrar)
+
+La skill mantiene compatibilidad con un rango de versiones. Tras detectar el
+runner, verificar su versión (major) contra esta matriz:
+
+| Componente | Rango validado |
+|------------|----------------|
+| Node | ≥ 18 |
+| Jest | 28 – 30 |
+| Vitest | 1 – 3 |
+| TypeScript | ≥ 4.7 |
+| ts-jest | acorde a la versión de Jest |
+
+**Dentro del rango:** continuar sin avisos (ver "reportar solo el trabajo
+concreto" en SKILL.md).
+
+**FUERA del rango** (ej. Vitest 4, Jest 27, Node 16):
+
+1. **Notificar** concreto: qué componente, qué versión y por qué no está validada
+   (ej. *"Vitest 4 removió `onFinished`; el reporter está validado hasta Vitest 3"*).
+2. **Proponer** una versión compatible, que puede vivir **acotada a la suite de
+   seguridad** (devDep pinneada en su config aislado o entorno aparte), sin tocar
+   lo que el proyecto ya usa.
+3. **La decisión final es del usuario.** Preguntar con `AskUserQuestion`:
+   - *Ajustar a una versión compatible* (recomendado) — pinneada en la suite.
+   - *Crear un entorno/proceso aparte* para la suite de seguridad.
+   - *Continuar igual* (best-effort, puede fallar) — o no integrar por ahora.
+4. **Nunca** forzar el cambio ni actualizar/degradar dependencias del proyecto
+   sin aprobación explícita del usuario.
+
+> No romper proyectos con versiones previas: si no hay compatibilidad, se avisa y
+> se ofrece una salida acotada, pero manda el usuario.
+
+---
+
 ## Camino A — Proyecto con Vitest
 
 ### A.1 Instalar (solo si falta)
@@ -77,7 +112,7 @@ ninguno), usar `AskUserQuestion` con **exactamente dos opciones: Jest y Vitest**
 Vitest ya está. Normalmente **no se instala nada**. Si el proyecto no compila TS
 en tests, Vitest ya lo hace vía Vite/esbuild — no se necesita `ts-jest`.
 
-### A.2 `test/security/vitest-security.config.ts`
+### A.2 `test/security/security.config.ts`
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -93,7 +128,7 @@ export default defineConfig({
     globals: true,                 // REQUERIDO: metadata.ts usa expect.getState()
     environment: 'node',
     include: ['test/security/**/*.security-html.spec.ts'],
-    setupFiles: ['test/security/vitest-security.setup.ts'], // alias jest → vi
+    setupFiles: ['test/security/security.setup.ts'], // alias jest → vi
     reporters: [
       'default',
       new SecurityHtmlReporter({
@@ -120,7 +155,7 @@ Notas:
 - Si el proyecto es ESM puro y el config debe ser `.mts`, usar `import` igual;
   el reporter CJS se carga vía interop de Vite sin cambios.
 
-### A.2b `test/security/vitest-security.setup.ts` (specs idénticos en ambos runners)
+### A.2b `test/security/security.setup.ts` (specs idénticos en ambos runners)
 
 Los patterns de la skill (`references/test-patterns/*`) escriben mocks con
 `jest.fn()`. Vitest expone `vi`, no `jest`. Este setup aliasa `jest → vi` para
@@ -141,7 +176,7 @@ directamente. El shim es lo que mantiene los specs **portables** entre proyectos
 
 ```jsonc
 {
-  "test:security:html": "vitest run --config test/security/vitest-security.config.ts"
+  "test:security:html": "vitest run --config test/security/security.config.ts"
 }
 ```
 
@@ -161,7 +196,7 @@ npm install --save-dev jest ts-jest @types/jest
 Verificar en package.json primero. NO instalar Allure, allure-*, ni
 jest-html-reporters. Si Nest ya trae Jest, instalar solo lo ausente.
 
-### B.2 `test/security/jest-security-html.config.ts`
+### B.2 `test/security/security.config.ts`
 
 ```typescript
 import type { Config } from 'jest';
@@ -195,7 +230,7 @@ export default config;
 
 ```jsonc
 {
-  "test:security:html": "jest --config test/security/jest-security-html.config.ts --verbose"
+  "test:security:html": "jest --config test/security/security.config.ts --verbose"
 }
 ```
 

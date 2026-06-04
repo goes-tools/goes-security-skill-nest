@@ -27,10 +27,9 @@ aprobado en cada PR.
 ## 7.3 Configurar el gate
 
 1. `references/templates/security-gate.yml` → `.github/workflows/security-gate.yml`.
-2. `references/templates/jest-security-release.config.ts` →
-   `test/security/jest-security-release.config.ts` (camino Vitest: análogo
-   `vitest-security-release.config.ts`, mismo reporter universal `html-reporter.js`
-   instanciado como en `runner-setup.md`).
+2. `references/templates/security-release.config.ts` →
+   `test/security/security-release.config.ts` (Vitest: mismo nombre, instanciando
+   el reporter universal `html-reporter.js` como en `runner-setup.md`).
 3. Scripts:
    ```jsonc
    {
