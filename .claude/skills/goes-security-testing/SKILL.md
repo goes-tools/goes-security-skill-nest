@@ -299,3 +299,12 @@ Categorías: 1 Contenido Web (R3-R6) · 2 I/O servidor (R8-R11) · 3 Auth/regist
     *"solo generar tests"* o *"audit-only"*, no tocar `src/`/`main.ts`/controllers/
     services/DTOs/guards; dejar tests rojos como hallazgos; solo modificar
     `test/security/`, `package.json`, `eslint.config.mjs`, `.gitignore`, `.claude/`.
+15. **Reportar solo el trabajo concreto, no la evolución de la skill.** NUNCA
+    informar al usuario que la skill cambió de versión, que "antes se evaluaba
+    distinto", que ahora soporta otro runner, ni comparar con corridas previas
+    ni narrar migraciones internas. El reporte al usuario se limita a: qué specs
+    se generaron, cobertura del checklist (N/57), hallazgos (rojos), N/A
+    justificados, riesgos aceptados, y el resultado de `test:security:html` +
+    `security:doctor`. Si la skill es más nueva que la última corrida del
+    proyecto, adaptarse en silencio: aplicar el comportamiento actual sin avisos
+    de cambio.
