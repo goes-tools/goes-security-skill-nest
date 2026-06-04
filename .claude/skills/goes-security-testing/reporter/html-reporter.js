@@ -36,24 +36,155 @@ function tryReadProjectName(rootDir) {
   return null;
 }
 
+// Disambiguates the constructor: a Jest globalConfig carries rootDir/testMatch
+// and never the reporter's own options (outputPath).
+function looksLikeJestGlobalConfig(o) {
+  return (
+    !!o &&
+    typeof o === 'object' &&
+    o.outputPath === undefined &&
+    (o.rootDir !== undefined || o.testMatch !== undefined || o.testPathPattern !== undefined)
+  );
+}
+
 class SecurityHtmlReporter {
 
-  constructor(globalConfig, options) {
+  // Universal: Jest instantiates (globalConfig, options); Vitest (options).
+  constructor(arg1, arg2) {
+    let globalConfig = null;
+    let options = {};
+    if (arg2 !== undefined) {
+      globalConfig = arg1;
+      options = arg2 || {};
+    } else if (looksLikeJestGlobalConfig(arg1)) {
+      globalConfig = arg1;
+    } else {
+      options = arg1 || {};
+    }
     this.globalConfig = globalConfig;
+    this.rootDir = (globalConfig && globalConfig.rootDir) || process.cwd();
     this.options = {
-      outputPath: options?.outputPath || './reports/security/security-report.html',
-      projectName: options?.projectName,
-      reportTitle: options?.reportTitle || 'Reporte de Tests de Seguridad',
+      outputPath: options.outputPath || './reports/security/security-report.html',
+      projectName: options.projectName,
+      reportTitle: options.reportTitle || 'Reporte de Tests de Seguridad',
     };
   }
 
-  async onRunComplete(
-    testContexts,
-    results,
-  ) {
-    const tempDir = resolveTempDir();
+  // Jest joins names with a space, Vitest with " > ". Collapsing both makes the
+  // metadata<->results join runner-agnostic.
+  static normalizeName(name) {
+    return String(name == null ? '' : name)
+      .replace(/\s*>\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
-    // Read metadata files
+  static makeKey(testPath, name) {
+    const p = testPath ? path.resolve(testPath) : '';
+    return `${p}::${SecurityHtmlReporter.normalizeName(name)}`;
+  }
+
+  // ─── Jest adapter ────────────────────────────────────────────────────────────
+  async onRunComplete(testContexts, results) {
+    const normalizedTests = [];
+    for (const testResult of results.testResults) {
+      for (const assertion of testResult.testResults) {
+        normalizedTests.push({
+          testFilePath: testResult.testFilePath,
+          title: assertion.title,
+          fullName: assertion.fullName,
+          status: assertion.status,
+          duration: assertion.duration || 0,
+          failureMessages: assertion.failureMessages || [],
+        });
+      }
+    }
+    const durationMs = results.testResults.reduce(
+      (acc, r) => acc + ((r.perfStats ? r.perfStats.end - r.perfStats.start : 0) || 0),
+      0,
+    );
+    await this.renderReport(normalizedTests, {
+      rootDir: this.globalConfig?.rootDir || process.cwd(),
+      durationMs,
+      suites: results.testResults.length,
+    });
+  }
+
+  // ─── Vitest adapter ───────────────────────────────────────────────────────
+  onInit(ctx) {
+    try {
+      const cfg = (ctx && ctx.config) || {};
+      this.rootDir = cfg.root || cfg.dir || this.rootDir || process.cwd();
+    } catch (e) {
+      // keep existing rootDir fallback
+    }
+  }
+
+  async onFinished(files, _errors) {
+    const normalizedTests = [];
+    let durationMs = 0;
+    for (const file of files || []) {
+      const filepath = file.filepath || file.name || '';
+      SecurityHtmlReporter.walkVitestTasks(file.tasks, filepath, normalizedTests);
+      if (file.result && file.result.duration) {
+        durationMs += file.result.duration;
+      }
+    }
+    await this.renderReport(normalizedTests, {
+      rootDir: this.rootDir || process.cwd(),
+      durationMs,
+      suites: (files || []).length,
+    });
+  }
+
+  static mapVitestState(state) {
+    if (state === 'pass') return 'passed';
+    if (state === 'fail') return 'failed';
+    return 'skipped';
+  }
+
+  // Walk up the suite chain, stopping before the File node (it carries
+  // `filepath`) so the file name is excluded — matching currentTestName.
+  static buildVitestFullName(task) {
+    const names = [];
+    let suite = task.suite;
+    while (suite && !suite.filepath) {
+      if (suite.name) names.unshift(suite.name);
+      suite = suite.suite;
+    }
+    names.push(task.name);
+    return names.join(' ');
+  }
+
+  static walkVitestTasks(tasks, filepath, out) {
+    for (const task of tasks || []) {
+      if (task.type === 'test' || task.type === 'custom') {
+        const result = task.result || {};
+        const errors = (result.errors || []).map((e) =>
+          !e ? String(e) : (e.stack || e.message || String(e)),
+        );
+        out.push({
+          testFilePath: filepath,
+          title: task.name,
+          fullName: SecurityHtmlReporter.buildVitestFullName(task),
+          status: SecurityHtmlReporter.mapVitestState(result.state),
+          duration: result.duration || 0,
+          failureMessages: errors,
+        });
+      } else if (task.tasks && task.tasks.length) {
+        SecurityHtmlReporter.walkVitestTasks(task.tasks, filepath, out);
+      }
+    }
+  }
+
+  // ─── Runner-agnostic core ────────────────────────────────────────────────────
+  // normalizedTests: { testFilePath, title, fullName, status, duration, failureMessages }[]
+  // runMeta: { rootDir, durationMs, suites }
+  async renderReport(normalizedTests, runMeta) {
+    const tempDir = resolveTempDir();
+    const mergedRootDir = (runMeta && runMeta.rootDir) || process.cwd();
+
+    // Read metadata files written by metadata.ts flush()
     const metadataMap = new Map();
     if (fs.existsSync(tempDir)) {
       const files = fs.readdirSync(tempDir);
@@ -62,7 +193,7 @@ class SecurityHtmlReporter {
           try {
             const content = fs.readFileSync(path.join(tempDir, file), 'utf-8');
             const metadata = JSON.parse(content);
-            const key = `${metadata.testPath}::${metadata.testName}`;
+            const key = SecurityHtmlReporter.makeKey(metadata.testPath, metadata.testName);
             metadataMap.set(key, metadata);
           } catch (e) {
             // Skip invalid metadata files
@@ -72,50 +203,45 @@ class SecurityHtmlReporter {
     }
 
     // Merge test results with metadata
-    const mergedRootDir = this.globalConfig?.rootDir || process.cwd();
     const mergedTests = [];
-    for (const testResult of results.testResults) {
-      for (const assertion of testResult.testResults) {
-        const key = `${testResult.testFilePath}::${assertion.fullName}`;
-        const metadata = metadataMap.get(key);
+    for (const tr of normalizedTests) {
+      const key = SecurityHtmlReporter.makeKey(tr.testFilePath, tr.fullName);
+      const metadata = metadataMap.get(key);
 
-        // Not Applicable override: tests that call t.notApplicable(reason)
-        // are reported as "skipped" regardless of whether their assertions
-        // passed, so they show up distinct from real passes/fails.
-        const naReason = metadata?.naReason;
-        const effectiveStatus = naReason ? 'skipped' : assertion.status;
+      // Not Applicable override: tests that call t.notApplicable(reason)
+      // are reported as "skipped" regardless of whether their assertions
+      // passed, so they show up distinct from real passes/fails.
+      const naReason = metadata?.naReason;
+      const effectiveStatus = naReason ? 'skipped' : tr.status;
 
-        // Relative path for the Reproducibility block (avoids leaking $HOME).
-        const relativePath = testResult.testFilePath
-          ? path.relative(mergedRootDir, testResult.testFilePath)
-          : '';
+      // Relative path for the Reproducibility block (avoids leaking $HOME).
+      const relativePath = tr.testFilePath
+        ? path.relative(mergedRootDir, tr.testFilePath)
+        : '';
 
-        const merged = {
-          id: this.generateId(),
-          name: assertion.title,
-          fullName: assertion.fullName,
-          status: effectiveStatus,
-          duration: assertion.duration || 0,
-          relativePath: relativePath,
-          errors: assertion.failureMessages || [],
-          epic: metadata?.epic,
-          feature: metadata?.feature,
-          story: metadata?.story,
-          severity: metadata?.severity,
-          owner: metadata?.owner,
-          tags: metadata?.tags || [],
-          labels: metadata?.labels || {},
-          links: metadata?.links || [],
-          description: metadata?.description,
-          parameters: metadata?.parameters || [],
-          steps: metadata?.steps || [],
-          evidences: metadata?.evidences || [],
-          naReason: naReason,
-          remediation: metadata?.remediation,
-        };
-
-        mergedTests.push(merged);
-      }
+      mergedTests.push({
+        id: this.generateId(),
+        name: tr.title,
+        fullName: tr.fullName,
+        status: effectiveStatus,
+        duration: tr.duration || 0,
+        relativePath: relativePath,
+        errors: tr.failureMessages || [],
+        epic: metadata?.epic,
+        feature: metadata?.feature,
+        story: metadata?.story,
+        severity: metadata?.severity,
+        owner: metadata?.owner,
+        tags: metadata?.tags || [],
+        labels: metadata?.labels || {},
+        links: metadata?.links || [],
+        description: metadata?.description,
+        parameters: metadata?.parameters || [],
+        steps: metadata?.steps || [],
+        evidences: metadata?.evidences || [],
+        naReason: naReason,
+        remediation: metadata?.remediation,
+      });
     }
 
     // Build summary — recount from merged tests so naReason overrides are
@@ -136,19 +262,18 @@ class SecurityHtmlReporter {
       failed: failedCount,
       skipped: skippedCount,
       notApplicable: naCount,
-      suites: results.testResults.length,
+      suites: (runMeta && runMeta.suites) || 0,
     };
 
-    const rootDir = this.globalConfig?.rootDir || process.cwd();
     const projectName =
       this.options.projectName ||
-      tryReadProjectName(rootDir) ||
+      tryReadProjectName(mergedRootDir) ||
       'Security Report';
 
     const reportData = {
       meta: {
         generatedAt: new Date().toISOString(),
-        duration: results.testResults.reduce((acc, r) => acc + (r.perfStats?.end - r.perfStats?.start || 0), 0),
+        duration: (runMeta && runMeta.durationMs) || 0,
         project: projectName,
         title: this.options.reportTitle,
         reporterVersion: REPORTER_VERSION,
@@ -3625,3 +3750,4 @@ class SecurityHtmlReporter {
 }
 
 module.exports = SecurityHtmlReporter;
+module.exports.default = SecurityHtmlReporter; // ESM default-import interop

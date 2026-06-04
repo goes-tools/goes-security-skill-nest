@@ -38,15 +38,25 @@ function read(p: string): string {
 // 1. Archivos canonicos de la skill
 // ============================================================
 const REQUIRED_FILES = [
-  'test/security/jest-security-html.config.ts',
   'test/security/security.snapshot.json',
   '.github/workflows/security-gate.yml',
   '.github/CODEOWNERS',
 ];
 const missingFiles = REQUIRED_FILES.filter((f) => !exists(f));
+
+// Basta con que exista el config aislado de Jest O de Vitest.
+const SECURITY_RUNNER_CONFIGS = [
+  'test/security/jest-security-html.config.ts',
+  'test/security/vitest-security.config.ts',
+];
+const hasRunnerConfig = SECURITY_RUNNER_CONFIGS.some((f) => exists(f));
+if (!hasRunnerConfig) {
+  missingFiles.push(`uno de: ${SECURITY_RUNNER_CONFIGS.join(' | ')}`);
+}
+
 checks.push({
   id: 'CANONICAL_FILES',
-  description: 'Archivos canonicos de la skill presentes',
+  description: 'Archivos canonicos de la skill presentes (config de runner: Jest o Vitest)',
   passed: missingFiles.length === 0,
   missing: missingFiles,
 });
