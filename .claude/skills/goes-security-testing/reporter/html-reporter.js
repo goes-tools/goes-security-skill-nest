@@ -8,8 +8,8 @@ const os = require('os');
 const REPORTER_VERSION = '2.0.0';
 
 // ─── Per-process run id ─────────────────────────────────────────────────────
-// metadata.ts and html-reporter.js share this convention so multiple Jest
-// workers (or simultaneous CI jobs) never mix metadata files.
+// metadata.ts and html-reporter.js share this convention so multiple runner
+// workers (Jest/Vitest) or simultaneous CI jobs never mix metadata files.
 function resolveTempDir() {
   if (process.env.SECURITY_REPORTER_TEMP_DIR) {
     return process.env.SECURITY_REPORTER_TEMP_DIR;
@@ -36,24 +36,258 @@ function tryReadProjectName(rootDir) {
   return null;
 }
 
+// Disambiguates the constructor: a Jest globalConfig carries rootDir/testMatch
+// and never the reporter's own options (outputPath).
+function looksLikeJestGlobalConfig(o) {
+  return (
+    !!o &&
+    typeof o === 'object' &&
+    o.outputPath === undefined &&
+    (o.rootDir !== undefined || o.testMatch !== undefined || o.testPathPattern !== undefined)
+  );
+}
+
 class SecurityHtmlReporter {
 
-  constructor(globalConfig, options) {
+  // Universal: Jest instantiates (globalConfig, options); Vitest (options).
+  constructor(arg1, arg2) {
+    let globalConfig = null;
+    let options = {};
+    if (arg2 !== undefined) {
+      globalConfig = arg1;
+      options = arg2 || {};
+    } else if (looksLikeJestGlobalConfig(arg1)) {
+      globalConfig = arg1;
+    } else {
+      options = arg1 || {};
+    }
     this.globalConfig = globalConfig;
+    this.rootDir = (globalConfig && globalConfig.rootDir) || process.cwd();
     this.options = {
-      outputPath: options?.outputPath || './reports/security/security-report.html',
-      projectName: options?.projectName,
-      reportTitle: options?.reportTitle || 'Reporte de Tests de Seguridad',
+      outputPath: options.outputPath || './reports/security/security-report.html',
+      projectName: options.projectName,
+      reportTitle: options.reportTitle || 'Reporte de Tests de Seguridad',
     };
   }
 
-  async onRunComplete(
-    testContexts,
-    results,
-  ) {
-    const tempDir = resolveTempDir();
+  // Jest joins names with a space, Vitest with " > ". Collapsing both makes the
+  // metadata<->results join runner-agnostic.
+  static normalizeName(name) {
+    return String(name == null ? '' : name)
+      .replace(/\s*>\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
 
-    // Read metadata files
+  static makeKey(testPath, name) {
+    const p = testPath ? path.resolve(testPath) : '';
+    return `${p}::${SecurityHtmlReporter.normalizeName(name)}`;
+  }
+
+  // ─── Jest adapter ────────────────────────────────────────────────────────────
+  async onRunComplete(testContexts, results) {
+    const normalizedTests = [];
+    for (const testResult of results.testResults) {
+      const assertions = testResult.testResults || [];
+      // A spec that fails to compile/import has no assertions but a
+      // testExecError. Surface it as a RED test so the spec never vanishes
+      // silently from a security report.
+      if (assertions.length === 0 && (testResult.testExecError || testResult.failureMessage)) {
+        const err = testResult.testExecError;
+        normalizedTests.push({
+          testFilePath: testResult.testFilePath,
+          title: '(archivo de test no se pudo cargar)',
+          fullName: '(archivo de test no se pudo cargar)',
+          status: 'failed',
+          duration: 0,
+          failureMessages: [
+            (err && (err.stack || err.message)) ||
+              testResult.failureMessage ||
+              'El archivo de test fallo al cargar.',
+          ],
+        });
+        continue;
+      }
+      for (const assertion of assertions) {
+        normalizedTests.push({
+          testFilePath: testResult.testFilePath,
+          title: assertion.title,
+          fullName: assertion.fullName,
+          status: assertion.status,
+          duration: assertion.duration || 0,
+          failureMessages: assertion.failureMessages || [],
+        });
+      }
+    }
+    const durationMs = results.testResults.reduce(
+      (acc, r) => acc + ((r.perfStats ? r.perfStats.end - r.perfStats.start : 0) || 0),
+      0,
+    );
+    await this.renderReport(normalizedTests, {
+      rootDir: this.rootDir || process.cwd(),
+      durationMs,
+      suites: results.testResults.length,
+    });
+  }
+
+  // ─── Vitest adapter ───────────────────────────────────────────────────────
+  // Vitest ≤3 llama onInit + onFinished(files). Vitest 4 removió onFinished y usa
+  // onTestRunEnd(testModules) con la API "Reported Tasks". Soportamos ambas; el
+  // guard _vitestRendered evita doble render si una versión disparara las dos.
+  onInit(ctx) {
+    try {
+      const cfg = (ctx && ctx.config) || {};
+      this.rootDir = cfg.root || cfg.dir || this.rootDir || process.cwd();
+    } catch (e) {
+      // keep existing rootDir fallback
+    }
+  }
+
+  // Vitest 4+ (API "Reported Tasks"): onTestRunEnd(testModules, errors, reason).
+  async onTestRunEnd(testModules, _errors, _reason) {
+    if (this._vitestRendered) return;
+    this._vitestRendered = true;
+    const normalizedTests = [];
+    let durationMs = 0;
+    for (const mod of testModules || []) {
+      const filepath = (mod && mod.moduleId) || '';
+      let tests = [];
+      try {
+        tests = mod.children ? Array.from(mod.children.allTests()) : [];
+      } catch (e) {
+        tests = [];
+      }
+      for (const tc of tests) {
+        const res = (tc.result && tc.result()) || {};
+        const diag = (tc.diagnostic && tc.diagnostic()) || {};
+        const dur = diag.duration || 0;
+        durationMs += dur;
+        // Reported Tasks usa estados 'passed' | 'failed' | 'skipped' | 'pending'.
+        const status =
+          res.state === 'passed' ? 'passed' : res.state === 'failed' ? 'failed' : 'skipped';
+        normalizedTests.push({
+          testFilePath: filepath,
+          title: tc.name,
+          fullName: tc.fullName,
+          status,
+          duration: dur,
+          failureMessages: (res.errors || []).map((e) =>
+            !e ? String(e) : (e.stack || e.message || String(e)),
+          ),
+        });
+      }
+      // Módulo que falló a colección (sin tests pero con errores) → rojo.
+      if (tests.length === 0) {
+        let modErrors = [];
+        try {
+          modErrors = (mod.errors && mod.errors()) || [];
+        } catch (e) {
+          modErrors = [];
+        }
+        if (modErrors.length) {
+          normalizedTests.push({
+            testFilePath: filepath,
+            title: '(archivo de test no se pudo cargar)',
+            fullName: '(archivo de test no se pudo cargar)',
+            status: 'failed',
+            duration: 0,
+            failureMessages: modErrors.map((e) =>
+              !e ? String(e) : (e.stack || e.message || String(e)),
+            ),
+          });
+        }
+      }
+    }
+    await this.renderReport(normalizedTests, {
+      rootDir: this.rootDir || process.cwd(),
+      durationMs,
+      suites: (testModules || []).length,
+    });
+  }
+
+  async onFinished(files, _errors) {
+    if (this._vitestRendered) return;
+    this._vitestRendered = true;
+    const normalizedTests = [];
+    let durationMs = 0;
+    for (const file of files || []) {
+      const filepath = file.filepath || file.name || '';
+      const before = normalizedTests.length;
+      SecurityHtmlReporter.walkVitestTasks(file.tasks, filepath, normalizedTests);
+      // A spec that fails to collect (import/compile error) yields no tasks but
+      // a failed file result. Surface it as a RED test so it never vanishes.
+      if (normalizedTests.length === before && file.result && file.result.state === 'fail') {
+        const errs = (file.result.errors || []).map((e) =>
+          !e ? String(e) : (e.stack || e.message || String(e)),
+        );
+        normalizedTests.push({
+          testFilePath: filepath,
+          title: '(archivo de test no se pudo cargar)',
+          fullName: '(archivo de test no se pudo cargar)',
+          status: 'failed',
+          duration: 0,
+          failureMessages: errs.length ? errs : ['El archivo de test fallo al cargar.'],
+        });
+      }
+      if (file.result && file.result.duration) {
+        durationMs += file.result.duration;
+      }
+    }
+    await this.renderReport(normalizedTests, {
+      rootDir: this.rootDir || process.cwd(),
+      durationMs,
+      suites: (files || []).length,
+    });
+  }
+
+  static mapVitestState(state) {
+    if (state === 'pass') return 'passed';
+    if (state === 'fail') return 'failed';
+    return 'skipped';
+  }
+
+  // Walk up the suite chain, stopping before the File node (it carries
+  // `filepath`) so the file name is excluded — matching currentTestName.
+  static buildVitestFullName(task) {
+    const names = [];
+    let suite = task.suite;
+    while (suite && !suite.filepath) {
+      if (suite.name) names.unshift(suite.name);
+      suite = suite.suite;
+    }
+    names.push(task.name);
+    return names.join(' ');
+  }
+
+  static walkVitestTasks(tasks, filepath, out) {
+    for (const task of tasks || []) {
+      if (task.type === 'test' || task.type === 'custom') {
+        const result = task.result || {};
+        const errors = (result.errors || []).map((e) =>
+          !e ? String(e) : (e.stack || e.message || String(e)),
+        );
+        out.push({
+          testFilePath: filepath,
+          title: task.name,
+          fullName: SecurityHtmlReporter.buildVitestFullName(task),
+          status: SecurityHtmlReporter.mapVitestState(result.state),
+          duration: result.duration || 0,
+          failureMessages: errors,
+        });
+      } else if (task.tasks && task.tasks.length) {
+        SecurityHtmlReporter.walkVitestTasks(task.tasks, filepath, out);
+      }
+    }
+  }
+
+  // ─── Runner-agnostic core ────────────────────────────────────────────────────
+  // normalizedTests: { testFilePath, title, fullName, status, duration, failureMessages }[]
+  // runMeta: { rootDir, durationMs, suites }
+  async renderReport(normalizedTests, runMeta) {
+    const tempDir = resolveTempDir();
+    const mergedRootDir = (runMeta && runMeta.rootDir) || process.cwd();
+
+    // Read metadata files written by metadata.ts flush()
     const metadataMap = new Map();
     if (fs.existsSync(tempDir)) {
       const files = fs.readdirSync(tempDir);
@@ -62,7 +296,7 @@ class SecurityHtmlReporter {
           try {
             const content = fs.readFileSync(path.join(tempDir, file), 'utf-8');
             const metadata = JSON.parse(content);
-            const key = `${metadata.testPath}::${metadata.testName}`;
+            const key = SecurityHtmlReporter.makeKey(metadata.testPath, metadata.testName);
             metadataMap.set(key, metadata);
           } catch (e) {
             // Skip invalid metadata files
@@ -72,50 +306,58 @@ class SecurityHtmlReporter {
     }
 
     // Merge test results with metadata
-    const mergedRootDir = this.globalConfig?.rootDir || process.cwd();
     const mergedTests = [];
-    for (const testResult of results.testResults) {
-      for (const assertion of testResult.testResults) {
-        const key = `${testResult.testFilePath}::${assertion.fullName}`;
-        const metadata = metadataMap.get(key);
+    let matchedCount = 0;
+    for (const tr of normalizedTests) {
+      const key = SecurityHtmlReporter.makeKey(tr.testFilePath, tr.fullName);
+      const metadata = metadataMap.get(key);
+      if (metadata) matchedCount++;
 
-        // Not Applicable override: tests that call t.notApplicable(reason)
-        // are reported as "skipped" regardless of whether their assertions
-        // passed, so they show up distinct from real passes/fails.
-        const naReason = metadata?.naReason;
-        const effectiveStatus = naReason ? 'skipped' : assertion.status;
+      // Not Applicable override: tests that call t.notApplicable(reason)
+      // are reported as "skipped" regardless of whether their assertions
+      // passed, so they show up distinct from real passes/fails.
+      const naReason = metadata?.naReason;
+      const effectiveStatus = naReason ? 'skipped' : tr.status;
 
-        // Relative path for the Reproducibility block (avoids leaking $HOME).
-        const relativePath = testResult.testFilePath
-          ? path.relative(mergedRootDir, testResult.testFilePath)
-          : '';
+      // Relative path for the Reproducibility block (avoids leaking $HOME).
+      const relativePath = tr.testFilePath
+        ? path.relative(mergedRootDir, tr.testFilePath)
+        : '';
 
-        const merged = {
-          id: this.generateId(),
-          name: assertion.title,
-          fullName: assertion.fullName,
-          status: effectiveStatus,
-          duration: assertion.duration || 0,
-          relativePath: relativePath,
-          errors: assertion.failureMessages || [],
-          epic: metadata?.epic,
-          feature: metadata?.feature,
-          story: metadata?.story,
-          severity: metadata?.severity,
-          owner: metadata?.owner,
-          tags: metadata?.tags || [],
-          labels: metadata?.labels || {},
-          links: metadata?.links || [],
-          description: metadata?.description,
-          parameters: metadata?.parameters || [],
-          steps: metadata?.steps || [],
-          evidences: metadata?.evidences || [],
-          naReason: naReason,
-          remediation: metadata?.remediation,
-        };
+      mergedTests.push({
+        id: this.generateId(),
+        name: tr.title,
+        fullName: tr.fullName,
+        status: effectiveStatus,
+        duration: tr.duration || 0,
+        relativePath: relativePath,
+        errors: tr.failureMessages || [],
+        epic: metadata?.epic,
+        feature: metadata?.feature,
+        story: metadata?.story,
+        severity: metadata?.severity,
+        owner: metadata?.owner,
+        tags: metadata?.tags || [],
+        labels: metadata?.labels || {},
+        links: metadata?.links || [],
+        description: metadata?.description,
+        parameters: metadata?.parameters || [],
+        steps: metadata?.steps || [],
+        evidences: metadata?.evidences || [],
+        naReason: naReason,
+        remediation: metadata?.remediation,
+      });
+    }
 
-        mergedTests.push(merged);
-      }
+    // Diagnostic: tests ran but none matched metadata → report renders without
+    // epic/feature/evidence/tags. Most common causes: (Vitest) missing
+    // globals:true in the security config, or a test not calling await t.flush().
+    if (mergedTests.length > 0 && matchedCount === 0) {
+      console.warn(
+        '\n⚠ Security Reporter: 0 tests cruzaron con metadata. El reporte saldra ' +
+          'sin epic/feature/evidencia/tags.\n  Revisar: (Vitest) globals:true en el ' +
+          'config de seguridad; o que cada test llame await t.flush().',
+      );
     }
 
     // Build summary — recount from merged tests so naReason overrides are
@@ -136,19 +378,18 @@ class SecurityHtmlReporter {
       failed: failedCount,
       skipped: skippedCount,
       notApplicable: naCount,
-      suites: results.testResults.length,
+      suites: (runMeta && runMeta.suites) || 0,
     };
 
-    const rootDir = this.globalConfig?.rootDir || process.cwd();
     const projectName =
       this.options.projectName ||
-      tryReadProjectName(rootDir) ||
+      tryReadProjectName(mergedRootDir) ||
       'Security Report';
 
     const reportData = {
       meta: {
         generatedAt: new Date().toISOString(),
-        duration: results.testResults.reduce((acc, r) => acc + (r.perfStats?.end - r.perfStats?.start || 0), 0),
+        duration: (runMeta && runMeta.durationMs) || 0,
         project: projectName,
         title: this.options.reportTitle,
         reporterVersion: REPORTER_VERSION,
@@ -211,8 +452,40 @@ class SecurityHtmlReporter {
     return Math.random().toString(36).substring(2, 11);
   }
 
+  // Cobertura del checklist GOES para el CI gate (job checklist-coverage y el
+  // resumen del PR leen window.__GOES_STATS__ del HTML). Un item está "cubierto"
+  // si tiene >=1 test real (pass/fail) tagueado `GOES Checklist Rxx`; "na" si
+  // todos sus tests son notApplicable; "missing" si no tiene ningún test.
+  computeGoesStats(tests) {
+    const items = [];
+    for (let n = 3; n <= 63; n++) {
+      if ([7, 12, 36, 56].includes(n)) continue; // gaps de numeración
+      items.push('R' + n);
+    }
+    let covered = 0;
+    let na = 0;
+    let missing = 0;
+    for (const r of items) {
+      const tag = 'GOES Checklist ' + r;
+      const matched = (tests || []).filter((t) =>
+        (t.tags || []).some((tg) => String(tg).trim() === tag),
+      );
+      if (matched.length === 0) {
+        missing++;
+      } else if (matched.some((t) => !t.naReason && (t.status === 'passed' || t.status === 'failed'))) {
+        covered++;
+      } else {
+        na++;
+      }
+    }
+    return { totalChecklistItems: items.length, covered, na, missing };
+  }
+
   generateHtml(reportData) {
     const dataJson = JSON.stringify(reportData).replace(/</g, '\\x3c').replace(/>/g, '\\x3e');
+    // Objeto PLANO (sin llaves anidadas): el gate lo extrae con
+    // /window\.__GOES_STATS__\s*=\s*(\{[^}]+\})/. No anidar.
+    const statsJson = JSON.stringify(this.computeGoesStats(reportData.tests));
     const escapedTitle = String(reportData.meta.title || 'Security Test Report')
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -2067,6 +2340,7 @@ class SecurityHtmlReporter {
 
   <script>
     const DATA = ${dataJson};
+    window.__GOES_STATS__ = ${statsJson};
 
     let currentFilter = 'all';
     let filteredTests = DATA.tests;
@@ -3625,3 +3899,4 @@ class SecurityHtmlReporter {
 }
 
 module.exports = SecurityHtmlReporter;
+module.exports.default = SecurityHtmlReporter; // ESM default-import interop

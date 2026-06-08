@@ -1,0 +1,55 @@
+{
+  "//": "Allowlist ACOTADO a las operaciones de la skill goes-security-testing.",
+  "//1": "Mergear estas entradas en el .claude/settings.json (equipo) o",
+  "//2": ".claude/settings.local.json (personal) del PROYECTO bajo test. Con esto",
+  "//3": "el usuario aprueba UNA vez y la skill corre sin pedir permiso por comando.",
+  "//4": "Es deliberadamente scopeado (no Bash(*)) para no abrir mas de lo necesario.",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+
+      "Edit(test/security/**)",
+      "Write(test/security/**)",
+      "Edit(scripts/**)",
+      "Write(scripts/**)",
+      "Edit(.github/workflows/**)",
+      "Write(.github/workflows/**)",
+      "Edit(.github/CODEOWNERS)",
+      "Write(.github/CODEOWNERS)",
+      "Edit(.husky/**)",
+      "Write(.husky/**)",
+      "Edit(reports/**)",
+      "Write(reports/**)",
+      "Edit(package.json)",
+      "Edit(eslint.config.mjs)",
+      "Edit(.gitignore)",
+
+      "Bash(npm install:*)",
+      "Bash(npm i:*)",
+      "Bash(npm ci:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm install:*)",
+      "Bash(yarn add:*)",
+
+      "Bash(npm run test:security:html:*)",
+      "Bash(npm run test:security:release:*)",
+      "Bash(npm run test:security:snapshot:update:*)",
+      "Bash(npm run security:doctor:*)",
+      "Bash(npm run test:all:*)",
+      "Bash(pnpm run test:security:*)",
+      "Bash(yarn test:security:*)",
+
+      "Bash(npx jest:*)",
+      "Bash(jest:*)",
+      "Bash(npx vitest:*)",
+      "Bash(vitest:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(node --check:*)",
+      "Bash(grep:*)",
+      "Bash(chmod +x .husky/*)"
+    ]
+  }
+}

@@ -1,1431 +1,349 @@
 ---
 name: goes-security-testing
-description: "Genera tests de seguridad con un Custom HTML Reporter (sin Java ni Allure) cubriendo el Checklist de Ciberseguridad GOES, OWASP Top 10 y OWASP API Security Top 10. Configura Jest + custom reporter, y crea specs completas con evidencia JSON, trazabilidad regulatoria y clasificacion por epicas. El reporte HTML incluye sidebar con navegacion Epic-Feature-Story, modal de detalle, graficos SVG, tema oscuro, busqueda y export PDF. Activar cuando el usuario pida: tests de seguridad, checklist GOES, pentest tests, security specs, reporte de seguridad HTML, security report, o cualquier variante."
+description: "Tests de seguridad para NestJS con reporte HTML autocontenido (sin Java ni Allure): Checklist de Ciberseguridad GOES (57 items), OWASP Top 10 y OWASP API Security Top 10, evidencia JSON y regresión de pentest. Runner-agnostic: detecta y usa el runner del proyecto (Jest o Vitest) sin imponer ninguno. Activar cuando el usuario pida: tests de seguridad, checklist GOES, pentest tests, security specs, reporte de seguridad HTML, security report, o variantes."
 ---
 
-# GOES Security Testing — Skill para NestJS + Jest + Custom HTML Reporter
+# GOES Security Testing — NestJS + (Jest|Vitest) + Custom HTML Reporter
 
-## Resumen
+Genera tests de seguridad profesionales para proyectos **NestJS**, con un
+**Custom HTML Reporter** (puro Node.js, sin Java ni Allure) que cubre **57 items**
+del Checklist GOES, **OWASP Top 10** y **OWASP API Security Top 10**.
 
-Este skill genera tests de seguridad profesionales para proyectos **NestJS + Jest** con un **Custom HTML Reporter** (sin Java, sin Allure).
-Cubre **57 items** del Checklist de Ciberseguridad GOES, **OWASP Top 10** y **OWASP API Security Top 10**.
+El reporter es **runner-agnostic**: el mismo reporte HTML se genera desde Jest o
+Vitest. La skill detecta el runner que el proyecto **ya tiene** y se adapta — no
+impone uno nuevo ni crea conflictos. El reporte es un HTML autocontenido con
+sidebar Epic→Feature→Story, modal de detalle, charts SVG, tema oscuro, búsqueda
+y export PDF.
 
-El reporte HTML es un archivo unico autocontenido con:
-- Sidebar con navegacion por Epic > Feature > Story
-- Modal de detalle con severity badges, tags, steps y evidencia JSON con syntax highlighting
-- Graficos SVG (pie de pass/fail, barras por severity, donut OWASP)
-- Tema oscuro, busqueda en tiempo real, export PDF
+## Carga de contexto bajo demanda (importante para eficiencia)
 
----
+Este SKILL.md es el índice del flujo. El detalle vive en `references/` y se lee
+**solo cuando el paso lo requiere**:
 
-## PASO 1: Analizar el proyecto (EXHAUSTIVO — no solo services)
+| Necesitás… | Leé |
+|------------|-----|
+| Configurar runner / detección Jest vs Vitest | `references/runner-setup.md` |
+| Decidir Hallazgo vs N/A vs Riesgo Aceptado, schema accepted_risks, 3 capas | `references/decision-rules.md` |
+| Checklist completo R3-R63 + OWASP + Guía GOES | `references/goes-checklist.md` |
+| CI gate, snapshot, branch protection, CODEOWNERS, SMTP | `references/ci-gate-setup.md` |
+| Qué patrón usar para un item (item → archivo) | `references/test-patterns/INDEX.md` |
+| Patrón concreto de un tipo de test | `references/test-patterns/NN-*.md` (ver INDEX primero) |
+| Regresión de pentest | `references/regression-template.md` + `references/pentest-history.yaml` |
 
-Antes de generar cualquier codigo, mapear TODA la superficie de seguridad del
-proyecto. NO basta con listar `.service.ts` — la logica de seguridad vive
-repartida en decoradores, guards, pipes, filtros, middleware, helpers, DTOs,
-main.ts y archivos de configuracion. Recorrer cada categoria abajo y leer los
-archivos relevantes ANTES de escribir un solo test.
+No copies estos archivos al proyecto salvo donde se indique (templates/examples).
+El reporter se **referencia** desde `.claude/skills/.../reporter/`, no se duplica.
 
-### 1.1 Manifiesto y dependencias
-
-```
-- Leer package.json:
-   * Framework (NestJS, Express, Fastify, etc.)
-   * ORM (Prisma, TypeORM, Sequelize, Mongoose, Drizzle)
-   * Version de Jest, ts-jest
-   * Dependencias de auth: passport, @nestjs/jwt, @nestjs/passport, bcrypt,
-     argon2, otplib, speakeasy
-   * Hardening: helmet, cors, csurf, express-rate-limit, @nestjs/throttler,
-     class-validator, class-transformer
-   * Manejo de archivos: multer, @nestjs/platform-express, file-type, sharp
-   * Logging: winston, pino, @nestjs/common Logger custom
-- Leer .env.example o config/*.ts para identificar variables sensibles
-  (JWT_SECRET, JWT_PUBLIC_KEY, BCRYPT_ROUNDS, CORS_ORIGINS, etc.)
-- Leer tsconfig.json para detectar flags relevantes (strict, paths)
-```
-
-### 1.2 Bootstrap y configuracion global
-
-Estos archivos definen reglas que aplican a TODA la app — sin leerlos los tests
-asumen defaults equivocados.
-
-```
-- src/main.ts (o bootstrap.ts): leer COMPLETO
-   * app.use(helmet(...))                      -> cubre R44-R50
-   * app.enableCors(...)                       -> cubre R38-R41
-   * app.useGlobalPipes(new ValidationPipe(...))-> cubre R5, R11
-   * app.useGlobalGuards(...)                  -> cubre R9, R21, R33, R34
-   * app.useGlobalInterceptors(...)            -> puede cubrir R10, audit
-   * app.useGlobalFilters(...)                 -> cubre R8 (errores genericos)
-   * app.use(cookieParser(...))                -> cubre R42, R51
-   * app.setGlobalPrefix(...) y versionado
-- src/app.module.ts: imports de ThrottlerModule, JwtModule, ConfigModule
-- nest-cli.json (si aplica)
-```
-
-### 1.3 Endpoints — controllers + decoradores + DTOs
-
-```
-- Glob: src/**/*.controller.ts
-   * Por cada controller identificar metodos HTTP (@Get, @Post, @Patch,
-     @Delete) y sus rutas
-   * Decoradores aplicados al controller y a cada metodo:
-     - @UseGuards(...)                  -> quien protege
-     - @Roles(...)                      -> cubre R9, R24, R34
-     - @Public()                        -> endpoints sin auth
-     - @Throttle(...) / @SkipThrottle() -> cubre R55
-     - @ApiBearerAuth() / @ApiOperation
-   * Parametros: @Body() DTO, @Param(), @Query(), @Headers()
-   * Excepciones que el metodo puede lanzar (BadRequest, Forbidden, etc.)
-- Glob: src/**/*.dto.ts
-   * Decoradores de class-validator: @IsString, @IsEmail, @MinLength,
-     @MaxLength, @Matches, @IsUUID
-   * Decoradores de class-transformer: @Transform, @Exclude (cubre R20, API3)
-- Glob: src/**/*.entity.ts y src/**/*.schema.ts (Prisma schema, TypeORM
-  entities, Mongoose schemas) - campos sensibles, indices unicos, relaciones
-```
-
-### 1.4 Guards, pipes, interceptors, filters, middleware
-
-Estos son los componentes que IMPLEMENTAN la mayoria del checklist GOES - sin
-leerlos los tests no saben que verificar.
-
-```
-- Glob: src/**/*.guard.ts        (JwtAuthGuard, RolesGuard, ThrottlerGuard)
-- Glob: src/**/*.strategy.ts     (JwtStrategy, LocalStrategy de passport)
-- Glob: src/**/*.pipe.ts         (ValidationPipe custom, ParseUUIDPipe)
-- Glob: src/**/*.interceptor.ts  (LoggingInterceptor, TransformInterceptor)
-- Glob: src/**/*.filter.ts       (AllExceptionsFilter, HttpExceptionFilter)
-- Glob: src/**/*.middleware.ts   (helmet wrapper, request ID, audit log)
-- Glob: src/**/*.decorator.ts    (decoradores custom: @CurrentUser, @Roles,
-                                  @Public, @AuditAction)
-```
-
-### 1.5 Servicios, repositorios y helpers
-
-```
-- Glob: src/**/*.service.ts        (logica de negocio + auth/crypto)
-- Glob: src/**/*.repository.ts     (acceso a datos)
-- Glob: src/common/**/*.ts y src/utils/**/*.ts y src/helpers/**/*.ts
-   * Funciones de hashing, comparacion timing-safe, generacion de UUID,
-     sanitizacion, parseo de tokens. Estos archivos casi siempre contienen
-     codigo critico para R15, R17, R20, R32.
-- Glob: src/**/jwt.config.ts y src/**/auth.config.ts
-- Glob: src/**/cors.config.ts y src/**/throttler.config.ts
-```
-
-### 1.6 Manejo de archivos (si aplica)
-
-```
-- Buscar multer.diskStorage / memoryStorage en cualquier parte
-- Buscar @UseInterceptors(FileInterceptor(...))
-- Buscar uso de file-type, sharp, fluent-ffmpeg, clamav, virustotal, sandbox
-- Carpetas /uploads, /storage, /tmp (si existen) — verificar que NO esten dentro
-  del directorio servido por el frontend (cubre R61)
-- Buscar header `Content-Disposition` en send/sendFile/res.attachment (cubre R62)
-- Buscar antivirus / content scanning en pipeline de upload (cubre R63)
-   * Si el proyecto NO maneja archivos, omitir patrones 20 y 25 (file upload).
-```
-
-### 1.7 Tests existentes y configuracion de Jest
-
-```
-- Glob: **/*.spec.ts, **/*.e2e-spec.ts (NO sobreescribir si existen)
-- jest.config.ts / jest.config.js / jest-e2e.config.ts
-- test/jest-e2e.json
-- Hay algun reporter ya configurado? Si es jest-html-reporters, allure-jest,
-  etc., desinstalarlo (este skill usa el reporter custom, no se necesita otro).
-```
-
-### 1.8 CI/CD y secretos (verificacion ligera)
-
-```
-- .github/workflows/*.yml o .gitlab-ci.yml: hay job de seguridad?
-- .env (NO leer su contenido si esta gitignored - solo verificar que NO esta
-  commiteado, eso ya cubre parte de R3)
-- .gitignore: confirmar que /node_modules, /dist, /coverage, /reports,
-  *.env estan excluidos
-```
-
-### 1.9 Salida del analisis (mental - no escribir archivos)
-
-Antes de pasar al paso siguiente, generar un mapa interno con:
-- Lista de modulos/recursos del proyecto.
-- Por cada modulo: que controllers expone, que servicios tiene, que guards lo
-  protegen, que DTOs valida.
-- Que items del checklist GOES YA estan implementados (porque encontraste el
-  guard / pipe / decorador correspondiente) -> testear.
-- Que items del checklist NO se ven implementados -> marcar como "test que
-  falla" o "test omitido" + recomendacion en `_recommendations.md`.
-- Que items NO aplican (por ejemplo, R57-R60 si el proyecto no maneja
-  archivos) -> generar el test de igual manera, pero llamar
-  `t.notApplicable('Reason')` en lugar de assertions reales. El reporter
-  los marca como skipped (icono ⊘ amarillo) con badge "N/A" y el motivo
-  en el modal. NO hacer `it.skip(...)` (pierde metadata) ni dejar el item
-  fuera del reporte (no queda trazabilidad).
+> **Ruta canónica:** la skill DEBE vivir en `.claude/skills/goes-security-testing/`.
+> Los configs y el doctor resuelven rutas relativas a esa ruta (el reporter, el
+> `pentest-history.yaml`, etc.). Si la skill llegó a otra ubicación (ej.
+> `.claude/goes-security-testing/`), moverla a la canónica ANTES de continuar.
 
 ---
 
-## PASO 2: Instalar dependencias (si no existen)
+## Permisos: agilizar la ejecución sin decidir por el usuario
 
-Verificar en package.json y solo instalar lo que falte:
+Para no pedir confirmación en cada comando, al INICIO ofrecer aplicar el allowlist
+**acotado** de `references/examples/settings.skill.json` al `.claude/settings.json`
+(equipo) o `.claude/settings.local.json` (personal) del proyecto. Con **una sola
+aceptación**, la skill ejecuta sus instalaciones, edits en `test/security/`,
+scripts `test:security:*`/`security:doctor` y greps sin prompts por comando. Si el
+usuario lo rechaza, la skill funciona igual, solo que pidiendo permiso por comando.
 
-```bash
-npm install --save-dev ts-jest @types/jest
-```
+**El allowlist cubre el "cómo" (ejecutar); NO el "qué" (criterio).** Estas
+decisiones SIEMPRE se preguntan con `AskUserQuestion`, aunque exista el allowlist
+— aceptar la skill NO equivale a decidirlas por el usuario:
 
-**NO instalar Allure, allure-commandline, allure-jest ni jest-html-reporters.** Este sistema usa un reporter custom puro Node.js que no necesita Java ni dependencias externas de reporte.
+- **Instalar Jest o Vitest** cuando el proyecto no tiene runner, o tiene otro
+  (Mocha/Jasmine/AVA). Nunca elegir por él.
+- **Runner ambiguo** (Jest y Vitest presentes y el script `test` no aclara).
+- **Modo audit-only** vs aplicar fixes en `src/`, si el usuario no lo declaró.
+- **Riesgos aceptados**: los decide el equipo + review de CODEOWNERS; la IA no
+  los inventa para silenciar un rojo.
+
+Regla: permiso de herramienta ≠ decisión de producto. El allowlist quita fricción;
+las bifurcaciones de criterio siguen siendo del usuario.
 
 ---
 
-## PASO 3: Configurar el custom reporter
+## PASO 0 — Detectar el test runner (antes de instalar NADA)
 
-Este skill incluye el reporter bundled en `.claude/skills/goes-security-testing/reporter/`. **NO copiar los archivos** — referenciarlos directamente para evitar duplicados.
+Leer `references/runner-setup.md`. Resumen:
 
-El reporter consiste en dos archivos:
+1. Inspeccionar `package.json` (deps, scripts, clave `jest`, `"type":"module"`,
+   package manager), configs en raíz (`vitest.config.*`/`vite.config.*` con
+   `test:` → Vitest; `jest.config.*`/`jest-e2e.json` → Jest; `.mocharc*` → Mocha;
+   `jasmine.json`/`@types/jasmine` → Jasmine) y los imports de los specs existentes.
+2. Decidir según lo detectado:
+   - **Jest** → `security.config.ts`. No instalar otro runner.
+   - **Vitest** → `security.config.ts`. No instalar otro runner.
+   - **Ambos Jest y Vitest** → usar el del script `test`; si es ambiguo, **preguntar**.
+   - **Otro runner (Mocha, Jasmine, AVA…)** → la suite de seguridad NO corre sobre
+     ellos. **Avisar** al usuario: *"Detecté <runner>. La suite de seguridad GOES
+     corre sobre Jest o Vitest; voy a crear un config **aislado** que no toca tu
+     runner principal ni tus tests."* Luego **preguntar** Jest o Vitest (solo uno)
+     e instalar ese runner únicamente para la suite de seguridad.
+   - **Ninguno configurado** → **Avisar**: *"No detecté sistema de pruebas. Voy a
+     instalar uno para la suite de seguridad."* Luego **preguntar** al usuario que
+     elija **Jest o Vitest (solo uno de esos dos)** e instalarlo.
+3. **Nunca** instalar Jest en un proyecto Vitest ni viceversa. Cuando haya que
+   elegir (otro runner / ninguno), usar `AskUserQuestion` con exactamente dos
+   opciones: **Jest** y **Vitest**. No ofrecer un tercero.
+4. **Compatibilidad de versiones:** verificar la versión del runner contra la
+   matriz soportada (`runner-setup.md`). Si está fuera de rango (ej. Vitest 4,
+   Jest 27, Node 16): **notificar**, **proponer** una versión compatible acotada
+   a la suite de seguridad, y **preguntar** al usuario (ajustar / entorno aparte /
+   continuar igual). Nunca degradar o actualizar deps del proyecto sin su OK.
 
-- **`reporter/html-reporter.js`** — Jest custom reporter (JavaScript puro, ~1600 lineas). Implementa `onRunComplete(testContexts, results)`: lee metadata JSON temporales, cruza con resultados de Jest, genera HTML autocontenido con sidebar, charts SVG, dark theme, busqueda y export PDF.
-- **`reporter/metadata.ts`** — Collector de metadata. Exporta `report()` y `AllureCompat`. Cada test registra epic, feature, story, severity, tags, steps, evidencia. Se escribe a archivos JSON temporales via `flush()`.
+La suite de seguridad siempre vive en un config **aislado** bajo `test/security/`
+(`security.config.ts`, `security.setup.ts`, `security-release.config.ts`) que no
+toca el config del proyecto.
 
-**NO modificar los archivos del reporter.** Estan listos para usar.
+---
 
-La estructura del proyecto sera:
+## PASO 1 — Analizar la superficie de seguridad (EXHAUSTIVO)
 
+NO basta con `.service.ts`. Recorrer y leer lo relevante ANTES de escribir tests:
+
+- **Manifiesto:** `package.json` (framework, ORM, auth: passport/@nestjs/jwt/
+  bcrypt/argon2/otplib; hardening: helmet/cors/csurf/throttler/class-validator;
+  archivos: multer/file-type/sharp; logging: winston/pino), `.env.example`,
+  `tsconfig.json`.
+- **Bootstrap global** (`main.ts`/`bootstrap.ts`): `helmet` (R44-R50), `enableCors`
+  (R38-R41), `ValidationPipe` global (R5,R11), global guards (R9,R21,R33,R34),
+  global filters (R8), `cookieParser` (R42,R51), prefix/versionado. `app.module.ts`:
+  `ThrottlerModule`, `JwtModule`, `ConfigModule`.
+- **Endpoints:** `src/**/*.controller.ts` (métodos HTTP, rutas, `@UseGuards`,
+  `@Roles`, `@Public`, `@Throttle`), `*.dto.ts` (class-validator/transformer),
+  `*.entity.ts`/`*.schema.ts` (campos sensibles, índices).
+- **Componentes de defensa:** `*.guard.ts`, `*.strategy.ts`, `*.pipe.ts`,
+  `*.interceptor.ts`, `*.filter.ts`, `*.middleware.ts`, `*.decorator.ts`.
+- **Servicios/helpers:** `*.service.ts`, `*.repository.ts`, `common/`/`utils/`/
+  `helpers/` (hashing, comparación timing-safe, sanitización), configs de jwt/cors/throttler.
+- **Archivos (si aplica):** multer `diskStorage`/`memoryStorage`,
+  `FileInterceptor`, file-type/sharp/clamav, carpetas de uploads, `Content-Disposition`.
+- **Tests y config existentes:** `**/*.spec.ts` (NO sobreescribir), config del
+  runner (PASO 0). Si hay otro reporter (jest-html-reporters, allure-jest), quitarlo.
+- **CI/secretos (ligero):** workflows, `.env` no commiteado, `.gitignore` cubre
+  node_modules/dist/coverage/reports/*.env.
+
+**Salida (mental):** mapa de módulos → controllers/servicios/guards/DTOs; qué
+items del checklist están implementados (→ testear), cuáles no (→ test rojo =
+hallazgo + recomendación en `_recommendations.md`), cuáles no aplican (→
+`t.notApplicable` con grep verificable). Ver `references/decision-rules.md`.
+
+---
+
+## PASO 2 — Instalar dependencias (solo lo que falte)
+
+Según el runner detectado (PASO 0). Detalle y configs en
+`references/runner-setup.md`. **NUNCA** instalar Allure, allure-commandline,
+allure-jest, jest-html-reporters ni Java.
+
+## PASO 3 — Configurar el reporter (sin copiarlo)
+
+El reporter viene bundled en `.claude/skills/goes-security-testing/reporter/`:
+
+- `reporter/html-reporter.js` — **reporter universal**: una sola clase que actúa
+  como reporter de Jest (`onRunComplete`) y de Vitest (`onInit` + `onTestRunEnd`
+  en v4 / `onFinished` en ≤3),
+  con un core compartido `renderReport`. Jest y Vitest referencian el MISMO
+  archivo; solo difiere cómo lo instancia cada config (ver `runner-setup.md`).
+- `reporter/metadata.ts` — collector: `report()` y `AllureCompat`; cada test
+  registra epic/feature/story/severity/tags/steps/evidencia, escrito a JSON temporal vía `flush()`.
+
+**NO modificar el reporter.** Está listo. Referenciarlo desde el config; no copiar.
+Estructura del proyecto:
 ```
 test/security/
-├── *.security-html.spec.ts         ← Archivos de specs de seguridad
-└── jest-security-html.config.ts    ← Config de Jest (apunta a .claude/ reporter)
+├── *.security-html.spec.ts            ← specs (idénticos en Jest y Vitest)
+└── <jest|vitest>-security*.config.ts  ← config aislado (ver runner-setup.md)
 ```
+
+## PASO 4 — Config del runner + scripts
+
+Tomar el config (Jest o Vitest) y los scripts de `references/runner-setup.md`.
+El alias `@security-reporter` permite `import { report } from '@security-reporter/metadata'`.
+No sobrescribir scripts existentes (`test`, `test:e2e`); solo agregar
+`test:security:html` y `test:all`. Ajustar a npm/pnpm/yarn detectado.
+
+## PASO 5 — Archivos de soporte
+
+`.gitignore`: agregar `/coverage` y `/reports` si faltan. `eslint.config.mjs`:
+override para `**/*.spec.ts` y `test/**/*.ts` desactivando reglas `no-unsafe-*` y
+`require-await` (ver `references/test-patterns/_setup.md`).
 
 ---
 
-## PASO 4: Configurar Jest
+## PASO 6 — Generar tests
 
-### jest-security-html.config.ts
+Por cada servicio/controller, crear un `.security-html.spec.ts`. Los specs son
+**idénticos en Jest y Vitest** (usan `describe/it/expect` + `report()`). Para
+mocks usar `jest.fn()`: en el camino Vitest, el setup `security.setup.ts`
+aliasa `jest → vi` para que el mismo spec corra sin cambios (ver `runner-setup.md`).
 
-```typescript
-import type { Config } from 'jest';
-import * as path from 'path';
-
-const reporterPath = path.resolve(__dirname, '../../.claude/skills/goes-security-testing/reporter');
-
-const config: Config = {
-  moduleFileExtensions: ['js', 'json', 'ts'],
-  rootDir: '../..',
-  testMatch: ['<rootDir>/test/security/**/*.security-html.spec.ts'],
-  transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
-  },
-  testEnvironment: 'node',
-  moduleNameMapper: {
-    '^src/(.*)$': '<rootDir>/src/$1',
-    '^@security-reporter/(.*)$': path.join(reporterPath, '$1'),
-  },
-  reporters: [
-    'default',
-    [
-      path.join(reporterPath, 'html-reporter.js'),
-      {
-        outputPath: './reports/security/security-report.html',
-        // Personalizacion del HTML reporter (todas opcionales).
-        // Si projectName no se define, el reporter intentara leerlo del package.json
-        // del rootDir del proyecto bajo test, y caera a 'Security Report' como fallback.
-        // projectName: 'Mi Proyecto GOES',
-        // reportTitle: 'Reporte de Seguridad GOES',
-      },
-    ],
-  ],
-};
-
-export default config;
-```
-
-El alias `@security-reporter` permite que los specs importen metadata limpiamente:
+### Estructura de cada test (patrón report())
 
 ```typescript
 import { report } from '@security-reporter/metadata';
-```
 
-### Scripts npm (agregar a package.json)
+it('PENTEST: rechaza payload con SQL injection', async () => {
+  const t = report();
 
-Agregar `test:security:html` y `test:all`. Si los scripts `test` o `test:e2e`
-no existen en el proyecto (proyecto NestJS recien creado), agregarlos tambien
-con los defaults estandar.
+  // 1. METADATA (obligatorio)
+  t.epic('Seguridad');
+  t.feature('Input Validation');
+  t.story('Rechazar payload con SQL injection');
+  t.severity('blocker');
+  t.tag('Pentest', 'OWASP A03', 'GOES Checklist R5');
 
-```json
-{
-  "test": "jest",
-  "test:e2e": "jest --config ./test/jest-e2e.json",
-  "test:security:html": "jest --config test/security/jest-security-html.config.ts --verbose",
-  "test:all": "npm test && npm run test:e2e && npm run test:security:html"
-}
-```
+  // 2. PARAMETERS
+  t.parameter('payload', "' OR 1=1 --");
 
-Notas para la IA al actualizar `package.json`:
-- Si `test`, `test:e2e` u otros scripts ya existen en el proyecto, NO
-  sobrescribirlos: solo verificar que `test:security:html` y `test:all`
-  esten presentes.
-- Si el proyecto usa pnpm o yarn, ajustar `test:all` a
-  `pnpm test && pnpm test:e2e && pnpm test:security:html` o equivalente con
-  yarn.
-- Si el proyecto NO tiene tests E2E configurados, el `test:all` puede omitir
-  ese paso: `npm test && npm run test:security:html`.
+  // 3. STEPS (Preparar/Ejecutar/Verificar) + EVIDENCE (input + output)
+  t.step('Preparar: crear payload malicioso');
+  const payload = { email: "' OR 1=1 --" };
+  t.evidence('Attacker payload (input)', payload);
 
-Para generar SOLO el reporte de seguridad:
-```bash
-npm run test:security:html
-# El HTML se genera en reports/security/security-report.html
-```
+  t.step('Ejecutar: enviar al servicio');
+  const result = await service.validate(payload);
 
-Para correr la suite completa (unit + e2e + seguridad):
-```bash
-npm run test:all
-```
+  t.step('Verificar: debe rechazar la inyeccion');
+  expect(result.valid).toBe(false);
+  t.evidence('Defense response (output)', result);
 
----
-
-## PASO 5: Crear archivos de soporte
-
-### .gitignore (agregar si no existen)
-```
-/coverage
-/reports
-```
-
-### eslint.config.mjs (agregar override para archivos de test)
-```javascript
-// Dentro del array de configuracion, agregar:
-{
-  files: ['**/*.spec.ts', '**/*.e2e-spec.ts', 'test/**/*.ts'],
-  rules: {
-    '@typescript-eslint/no-unsafe-assignment': 'off',
-    '@typescript-eslint/no-unsafe-member-access': 'off',
-    '@typescript-eslint/no-unsafe-call': 'off',
-    '@typescript-eslint/no-unsafe-return': 'off',
-    '@typescript-eslint/no-unsafe-argument': 'off',
-    '@typescript-eslint/no-unused-vars': 'warn',
-    '@typescript-eslint/require-await': 'off',
-  },
-}
-```
-
----
-
-## PASO 6: Generar tests
-
-Para CADA servicio/controller del proyecto, crear un archivo `.security-html.spec.ts` siguiendo las reglas de este skill.
-
-### Estructura obligatoria de cada test
-
-Hay dos patrones equivalentes. Usar el que resulte mas conveniente:
-
-#### Patron A: report() directo (recomendado para tests nuevos)
-
-```typescript
-import { Test, TestingModule } from '@nestjs/testing';
-import { report } from '@security-reporter/metadata';
-
-describe('NombreDelServicio', () => {
-  // setup...
-
-  it('nombre descriptivo del test', async () => {
-    const t = report();
-
-    // 1. METADATA (obligatorio en cada test)
-    t.epic('Seguridad');
-    t.feature('Input Validation');
-    t.story('Rechazar payload con SQL injection');
-    t.severity('blocker');
-    t.tag('Pentest', 'OWASP A03', 'GOES Checklist R5');
-
-    // 2. PARAMETERS (inputs visibles en el reporte)
-    t.parameter('email', 'test@goes.gob.sv');
-    t.parameter('payload', "' OR 1=1 --");
-
-    // 3. STEPS (patron Preparar/Ejecutar/Verificar)
-    t.step('Preparar: crear payload malicioso');
-    const payload = { email: "' OR 1=1 --" };
-    t.evidence('Input (payload)', payload);
-
-    t.step('Ejecutar: enviar al servicio');
-    const result = await service.validate(payload);
-
-    t.step('Verificar: debe rechazar la inyeccion');
-    expect(result.valid).toBe(false);
-    t.evidence('Resultado (output)', result);
-
-    await t.flush();
-  });
+  await t.flush();   // OBLIGATORIO: sin flush la metadata no llega al reporte
 });
 ```
 
-#### Patron B: AllureCompat (migracion desde Allure existente)
-
-Para migrar tests que ya usaban `allure-js-commons`, se puede usar `AllureCompat` que espeja la misma API:
-
-```typescript
-import { AllureCompat } from '@security-reporter/metadata';
-
-it('nombre del test', async () => {
-  const allure = new AllureCompat();
-
-  allure.epic('Seguridad');
-  allure.feature('Input Validation');
-  allure.severity('blocker');
-  allure.tag('Pentest', 'OWASP A03');
-  allure.parameter('key', 'value');
-
-  const result = allure.step('Ejecutar accion', () => {
-    return someFunction();
-  });
-
-  await allure.attachment('Resultado', JSON.stringify(result), {
-    contentType: 'application/json',
-  });
-
-  expect(result).toBeDefined();
-  await allure.flush();
-});
-```
+Migración desde Allure: `import { AllureCompat }` espeja la misma API
+(`allure.epic/feature/severity/tag/parameter/step/attachment/notApplicable/flush`).
+Ver `references/test-patterns/_allure-customization.md`.
 
 ### Reglas de metadata
 
 | Campo | Regla |
 |-------|-------|
-| `epic` | Area del sistema: Seguridad, Autenticacion, Dominio, Configuracion, Auditoria, Infraestructura, Archivos |
-| `feature` | Funcionalidad especifica: Timing Attack Prevention, RBAC, Input Validation, etc. |
-| `story` | Escenario concreto que se prueba |
-| `severity` | blocker = sistema no opera / critical = funcionalidad comprometida / normal = estandar / minor = edge case |
-| `tag` | SIEMPRE incluir: tag de categoria (Pentest, CRUD, Auth, Config) + tag de normativa (OWASP Axx, GOES Checklist Rxx) |
-| `parameter` | Inputs clave del test: payloads, emails, tokens, configuraciones |
-| `step` | Pasos descriptivos del test en formato Preparar/Ejecutar/Verificar |
-| `evidence` | Objetos JSON con datos de entrada/salida. Ver "Regla critica: evidence" mas abajo. |
+| `epic` | Área: Seguridad, Autenticacion, Dominio, Configuracion, Auditoria, Infraestructura, Archivos |
+| `feature` | Funcionalidad: Timing Attack Prevention, RBAC, Input Validation… |
+| `story` | Escenario concreto probado |
+| `severity` | blocker / critical / normal / minor (ver `_severity-guide.md`) |
+| `tag` | SIEMPRE: tag de categoría (Pentest/CRUD/Auth/Config) + tag normativo (OWASP Axx, GOES Checklist Rxx) |
+| `parameter` | Inputs clave: payloads, emails, tokens, configs |
+| `step` | Preparar / Ejecutar / Verificar |
+| `evidence` | Ver regla crítica abajo |
 
-### Regla critica: evidence (input + output)
+### Regla crítica: evidence (input + output)
 
-Cada test DEBE registrar **al menos dos** evidencias en este orden:
+Cada test DEBE registrar **al menos dos** evidencias, en orden: **input**
+(payload/parámetros/estado previo) y **output** (respuesta/resultado/estado
+final). Labels recomendados por tipo: Pentest `Attacker payload (input)` /
+`Defense response (output)`; CRUD `Request body (input)` / `Service response
+(output)`; Auth `Credentials (input)` / `Auth result (output)`; Config `Config
+snapshot (input)` / `Effective behavior (output)`. Si no hay input real (config
+estática), registrar uno descriptivo: `t.evidence('Initial state (input)', {...})`.
 
-1. **Input** — payload, parametros, configuracion o estado previo que el test envia al sistema.
-2. **Output** — respuesta, resultado, valor de retorno o estado final tras la ejecucion.
+### Regla crítica: código comentado = AUSENTE
 
-Nombres recomendados (consistencia visual en el modal):
+Todo test que inspeccione source por regex (helmet/CORS/ValidationPipe en
+`main.ts`, imports en `*.module.ts`, ausencia de `$queryRawUnsafe`/`eval(`) DEBE
+quitar comentarios primero. Helper `stripComments`/`readSrc` en
+`references/test-patterns/_static-analysis.md`. Cuando haya metadata en runtime,
+preferir `Reflect.getMetadata(...)` sobre la clase.
 
-| Tipo de test | Input label | Output label |
-|--------------|-------------|--------------|
-| Pentest      | `Attacker payload (input)` | `Defense response (output)` |
-| CRUD / DTO   | `Request body (input)` | `Service response (output)` |
-| Auth         | `Credentials (input)` | `Auth result (output)` |
-| Config       | `Config snapshot (input)` | `Effective behavior (output)` |
-| Headers / CORS | `Request (input)` | `Response headers (output)` |
+### Regla crítica: 3 capas + Hallazgo vs N/A vs Riesgo Aceptado
 
-Ejemplo minimo:
-
-```typescript
-const payload = { email: "' OR 1=1 --" };
-t.evidence('Attacker payload (input)', payload);
-
-const result = await service.validate(payload);
-t.evidence('Defense response (output)', result);
-```
-
-Tests sin par input/output son **incompletos** y deben corregirse antes de
-commitear. Si un test legitimamente no tiene input (ej: verificar configuracion
-estatica de helmet), registrar un input descriptivo: `t.evidence('Initial state
-(input)', { helmetEnabled: true, headers: ['CSP', 'HSTS', 'XCT'] });`.
-
-### Regla para tests de PENTEST
-
-- Prefijo "PENTEST:" en el nombre del it()
-- Epic: 'Seguridad'
-- Tag: 'Pentest' + referencia OWASP
-- Steps con ## Vulnerabilidad que previene y ## Defensa implementada
-- Evidence con payload del atacante (input) y respuesta de defensa (output)
-
-### Regla critica: codigo comentado cuenta como AUSENTE
-
-Cuando un test verifica la **presencia** de codigo en archivos fuente
-(`main.ts`, `app.module.ts`, controllers, etc.), un regex naive falla
-en el momento que un desarrollador **comenta** la linea en vez de
-borrarla. `// app.use(helmet());` haria pasar el test como si helmet
-estuviera activo, cuando en realidad no se esta ejecutando.
-
-**Regla**: todo test que inspeccione el source de un archivo y haga
-match por regex DEBE quitar los comentarios antes de buscar. Una linea
-comentada = codigo ausente.
-
-Helper canonico documentado en
-[`_static-analysis.md`](references/test-patterns/_static-analysis.md):
-
-```typescript
-const stripComments = (src: string): string =>
-  src
-    .replace(/\/\*[\s\S]*?\*\//g, '')
-    .replace(/(^|[^:])\/\/.*$/gm, '$1');
-
-const readSrc = (relativePath: string): string =>
-  stripComments(fs.readFileSync(path.resolve(__dirname, relativePath), 'utf-8'));
-```
-
-Uso obligatorio cuando:
-- Verificar middleware global en `main.ts` (helmet, CORS, ValidationPipe,
-  cookieParser, global guards/pipes/filters/interceptors).
-- Verificar imports y registros en `*.module.ts` (`ThrottlerModule`,
-  `JwtModule`, `ConfigModule`).
-- Verificar **ausencia** de patrones peligrosos (`$queryRawUnsafe`,
-  raw SQL, `eval(`, etc.).
-
-Cuando se puede usar `Reflect.getMetadata(...)` directamente sobre la
-clase (controllers con decoradores accesibles via import), preferir esa
-via — es mas directa y typed. La inspeccion de source con `stripComments`
-es para los casos donde no hay metadata expuesta en runtime (ej: el
-codigo de bootstrap en `main.ts`).
-
-### Regla critica: cobertura de 3 capas para controles de defensa
-
-Un test que verifica **solo** la configuracion (env vars, module imports)
-NO sirve como evidencia de cumplimiento de un item del checklist. Si un
-desarrollador comenta el decorator `@Throttle`, `@UseGuards(RolesGuard)`,
-`@UseGuards(JwtAuthGuard)`, etc., el test sigue verde y el control
-queda desactivado en runtime sin que el reporte se entere.
-
-Para los items que implementan controles de defensa (rate limiting, RBAC,
-auth guards, validation pipes, helmet, CORS, throttling, brute force
-protection, IDOR), el spec DEBE incluir las **3 capas**:
-
-| Capa | Que verifica | Como |
-|------|--------------|------|
-| **1. Configuracion** | env vars, module imports, valores por defecto correctos | Leer `envConfig()`, `app.module.ts`, defaults |
-| **2. Aplicacion** | el decorator/guard esta puesto en cada endpoint relevante | `Reflect.getMetadata(...)` sobre el metodo del controller; verificar que la lista de endpoints protegidos coincide con la esperada |
-| **3. Comportamiento** | cuando se dispara, el control rechaza efectivamente | Mock del guard que devuelve `false` o `429`; o E2E con supertest enviando N+1 requests |
-
-**Si solo cubris la capa 1, el test es invalido y el item del checklist
-queda como falso positivo.** Documentar la limitacion en el evidence si
-por algun motivo no podes cubrir capa 2 o 3 (ej: el proyecto no expone
-el controller para Reflect, o no hay tiempo para E2E).
-
-Items afectados por esta regla:
-
-- R9, R24, R34 (RBAC) — verificar `@Roles` y `RolesGuard`
-- R21, R33 (Forced browsing / token per request) — verificar `@UseGuards(JwtAuthGuard)`
-- R27 (Brute force) — verificar contador de intentos + bloqueo
-- R5, R11 (DTO validation) — verificar `ValidationPipe` global con `whitelist: true` y `forbidNonWhitelisted: true` + decoradores en DTO; para contrasenas: `@MinLength(12)` y `@MaxLength(32)`, NO `@Matches` con reglas arbitrarias de mayusculas/digitos/simbolos
-- R19 (JWT claims) — verificar que `JwtStrategy.validate()` chequea `signature/exp/iat/iss/aud`
-- R37 (ORM) — verificar que NO hay queries raw (`grep` por `$queryRaw`, `query()`, `createQueryRunner().query()`)
-- R38-R41 (CORS) — verificar `app.enableCors()` con valores correctos
-- R44-R50 (Headers) — verificar `app.use(helmet(...))` Y E2E que los headers salen
-- R55 (Rate limiting) — verificar config + `@Throttle` decorator + E2E 429
-- R57-R60 (File extension, magic bytes, size, UUID) — config (multer limits, fileFilter) + aplicacion (FileInterceptor en endpoint) + comportamiento (rechazar payload malicioso)
-- R61 (Storage outside webroot) — config (storage path) + aplicacion (multer.diskStorage destination o S3 client) + comportamiento (path no resuelve dentro de /public, /static, /dist)
-- R62 (Content-Disposition) — config (helmet/header middleware) + aplicacion (res.setHeader o @Header decorator en endpoint download) + comportamiento (E2E: GET /files/:id devuelve header `Content-Disposition: attachment`)
-- R63 (Malware scanning) — config (ClamAV / sandbox / lib instalada) + aplicacion (scanner invocado en pipeline antes de persistir) + comportamiento (rechazar payload con EICAR test string)
-- **R3, R4, R11, R20 — Response DTO sanitization** — config (ClassSerializerInterceptor global o response DTOs por controller) + aplicacion (decoradores `@Expose` explicitos en cada DTO) + comportamiento (E2E con `supertest`: la response de `/api/auth/me` NO contiene DUI completo, CUIDs Prisma, ni listas de permisos con IDs internos). Ver pattern 28.
-- **R11, R55 — Export controls** — config (DTO con `@IsDefined` + `@IsDateString` en filtros) + aplicacion (controller con `@UseGuards(RolesGuard)` + DTO obligatorio) + comportamiento (E2E: `POST /api/reports/permits` con `{"format":"xlsx"}` solo → 400; con filtros validos → max 1000 registros + audit log escrito). Ver pattern 29.
-- **R14, R55 — Captcha en endpoints publicos sensibles** — config (RecaptchaModule importado + env var del secret) + aplicacion (`@UseGuards(RecaptchaGuard)` en cada metodo publico sensible) + comportamiento (E2E: request sin token → 400/403; con token falso → 400/403 tras validacion server-side). Lista canonica de endpoints en pattern 30.
-
-NUNCA poner un test de control de defensa en un spec de "config-only".
-Cada test de control va en el spec del controller/service donde se aplica.
-
-### Regla critica: regresion de hallazgos por proyecto
-
-Cada proyecto mantiene su propio `pentest-history.yaml` con los hallazgos de
-SUS pentests. NO hay historial compartido entre proyectos.
-
-**Cuando la IA aplica la skill a un proyecto**:
-
-1. Si el proyecto ya tiene `pentest-history.yaml`, lo respeta.
-2. Si no lo tiene, copia el template vacio desde
-   `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
-3. El YAML del proyecto vive en `test/security/pentest-history.yaml`
-   (recomendado) o en `.claude/skills/.../pentest-history.yaml` segun
-   prefiera el equipo. Se protege con CODEOWNERS.
-
-**Cuando llega un pentest nuevo para el proyecto**:
-
-1. Equipo del proyecto agrega entries al `pentest-history.yaml` siguiendo
-   la plantilla del archivo (esta documentada al final del YAML).
-2. Por cada entry crea `test/security/regression/<VULN-ID>.regression.spec.ts`
-   siguiendo `references/regression-template.md`.
-3. Cada test de regresion lleva su propio tag `Pentest Regression <VULN-ID>`
-   que aparece en el reporte HTML, en el panel "Pentest Regression".
-
-**Que NO hace la skill**:
-
-- NO trae historia precargada de otros proyectos.
-- NO comparte VULN-IDs entre proyectos. Si dos proyectos tienen un mismo
-  bug, ambos lo registran independientemente en sus YAMLs.
-- NO acumula doctrina de proyectos especificos en el repo central de la
-  skill. La skill provee el MECANISMO, los proyectos provee la HISTORIA.
-
-**Que SI hace la skill**:
-
-- Provee la plantilla del YAML con el schema documentado.
-- Provee `t.acceptedRiskIfDeclared(rid)` para que cada test consulte el
-  snapshot del proyecto.
-- Provee el reporter que renderiza los 4 estados (verde / rojo / amarillo
-  N/A / violeta riesgo aceptado).
-- Provee el doctor que valida la integridad del YAML del proyecto.
+Los controles de defensa exigen 3 capas (config + aplicación + comportamiento) y
+NUNCA van en un spec "config-only". Antes de marcar el estado de un item, aplicar
+el árbol de decisión. Todo en `references/decision-rules.md` (leer antes de
+marcar `notApplicable` o `acceptedRiskIfDeclared`).
 
 ---
 
-
-### Regla critica: 3 mecanismos distintos — N/A vs Riesgo Aceptado vs Hallazgo
-
-Antes de marcar nada, ubicar el caso correcto. **Confundir estos 3 lleva a falsos positivos en pentest y falsos negativos en la skill**.
-
-| Caso | Cuando aplicar | Como marcarlo | Como se ve en el reporte |
-|------|----------------|---------------|---------------------------|
-| **HALLAZGO** | La superficie existe Y la defensa esperada NO existe. Es un bug real. | El test FALLA con sus assertions. NO `t.notApplicable()`, NO `t.acceptedRiskIfDeclared()`. | ✗ rojo |
-| **N/A — sin superficie** | El proyecto NO tiene la feature que el item evalua. Ej. R57-R63 file upload en un backend sin uploads. | `t.notApplicable('motivo + comando grep verificable')` | ⊘ amarillo, badge "N/A" |
-| **RIESGO ACEPTADO — con superficie** | La feature EXISTE pero el contexto del proyecto (interno, VPN, audiencia limitada) cambia el perfil de riesgo y el equipo decide no implementar la defensa. | Declarar en `security.snapshot.json` -> `accepted_risks[]` con motivo + aprobador + fecha de re-evaluacion. El test llama `await t.acceptedRiskIfDeclared('R6')` y si esta en el snapshot retorna true y se marca como skipped violeta. | 🟪 violeta, badge "RIESGO ACEPTADO" + callout con razon y review_at |
-
-### Cuando usar cada uno (caso GOES)
-
-**Ejemplo 1 — Proyecto admin interno, no expuesto a Internet publico:**
-
-- R6 (robots.txt + sitemap.xml): la feature aplica (el sistema sirve contenido HTML), pero el dominio esta detras de VPN. No es indexable. → **Riesgo Aceptado**: agregar a `accepted_risks` con motivo "Panel admin solo via VPN, no indexable" y compensating_controls.
-- R57-R63 (file upload): si NO hay endpoints multipart/form-data, **N/A** con `grep -r "multer" src/` → 0 resultados.
-- R44 (CSP sin unsafe-inline): si el frontend usa libreria legacy que require unsafe-inline → **Riesgo Aceptado** con migracion planeada en compensating_controls.
-
-**Ejemplo 2 — Portal publico de cara a ciudadanos:**
-
-- R6: la feature aplica Y el dominio es publico → debe estar implementado → si falta, **Hallazgo** (rojo).
-- R57-R63: si hay uploads, **Hallazgo** si falta alguna defensa.
-- R44: NO permitir riesgo aceptado en CSP de portal publico. Si falta, **Hallazgo**.
-
-### Schema del accepted_risks en security.snapshot.json
-
-```json
-{
-  "project_profile": {
-    "type": "internal_admin",
-    "description": "Panel administrativo de uso interno (jefaturas)",
-    "exposure": "internal",
-    "audience": "GOES staff (~50 usuarios)",
-    "data_classification": "datos personales de ciudadanos"
-  },
-  "accepted_risks": [
-    {
-      "rid": "R6",
-      "title": "robots.txt + sitemap.xml",
-      "reason": "Panel admin no esta expuesto a Internet publico. No es indexable por buscadores. Acceso solo via VPN.",
-      "approved_by": "@gerardo-amaya-dev",
-      "approved_at": "2026-06-04",
-      "review_at": "2026-12-04",
-      "compensating_controls": [
-        "VPN obligatorio",
-        "Auth Keycloak con MFA",
-        "IP allowlist a nivel LB"
-      ]
-    }
-  ]
-}
-```
-
-Reglas para `accepted_risks`:
-
-1. **Cada entrada requiere los 5 campos**: `rid`, `reason` (>=20 chars), `approved_by` (handle GitHub), `approved_at`, `review_at`. El doctor falla si alguno falta.
-2. **review_at debe ser fecha futura**. Si vence, el doctor falla. Es decir: cada riesgo tiene fecha de re-evaluacion obligatoria.
-3. **30 dias antes de vencer**, el doctor emite un warning para que el equipo programe el review.
-4. **Modificar `accepted_risks` requiere PR + review de CODEOWNERS** (el file esta protegido por CODEOWNERS).
-5. **Por convenio, los `compensating_controls` deben listar al menos 1 medida** que mitiga parcialmente el riesgo aceptado.
-
-### Como lo usa el test
-
-```typescript
-it('R6 — robots.txt accessible o riesgo aceptado', async () => {
-  const t = report();
-  t.epic('Configuracion').feature('Public Site Config').story('robots.txt');
-  t.tag('GOES Checklist R6');
-
-  // PRIMERO: consultar si el proyecto declaro este riesgo como aceptado
-  if (await t.acceptedRiskIfDeclared('R6')) {
-    await t.flush();
-    return; // El test queda en violeta con el callout de riesgo aceptado
-  }
-
-  // Si NO esta aceptado, ejecutar las assertions reales
-  const res = await request(app.getHttpServer()).get('/robots.txt').expect(200);
-  expect(res.text).toContain('User-agent');
-  expect(res.text).not.toMatch(/disallow:\s*\/admin/);
-  await t.flush();
-});
-```
-
----
-
-### Regla critica: notApplicable vs hallazgo (NO confundir)
-
-`notApplicable` se reserva **exclusivamente** para items donde la
-**superficie de ataque** no existe en el proyecto. Si la superficie
-existe pero el control de defensa esperado **falta o esta mal
-implementado**, eso es un **HALLAZGO** (test rojo), NUNCA un N/A.
-
-**Arbol de decision** antes de escribir el test:
-
-```
-1. ¿El proyecto recibe/maneja este tipo de input o feature?
-   (uploads, cookies, JWT, sesiones, MFA, SSRF egress, archivos, etc.)
-   │
-   ├── NO existe la superficie → t.notApplicable(motivo verificable)
-   │   Ej: backend SOLO con endpoints JSON, sin multer ni
-   │   FileInterceptor → R57-R60 son N/A.
-   │
-   └── SI existe la superficie
-       │
-       2. ¿El control de defensa especifico esta implementado y correcto?
-       │
-       ├── SI bien → test pasa (verde ✓)
-       ├── SI pero mal → test FALLA (rojo ✗) — HALLAZGO
-       └── NO existe → test FALLA (rojo ✗) — HALLAZGO
-       │
-       NUNCA marcar como N/A si la superficie existe.
-```
-
-**Ejemplos canonicos**:
-
-| Estado del proyecto | R57 (Magic Bytes) | Justificacion |
-|---|---|---|
-| No usa multer, ni FileInterceptor | ⊘ N/A | Superficie ausente |
-| Usa multer, valida magic bytes con `file-type` | ✓ verde | Control implementado |
-| Usa multer, NO valida magic bytes | ✗ ROJO | **Hallazgo — superficie existe, defensa ausente** |
-| Usa multer, valida pero solo extension (no magic) | ✗ ROJO | **Hallazgo — defensa incompleta** |
-
-**Si Claude detecta que la superficie existe pero el control no esta**:
-
-1. NO marcar `t.notApplicable(...)`.
-2. NO escribir el test asumiendo que la defensa existe (eso es falso positivo).
-3. Generar el test igual con la assertion correcta (`expect(...).toThrow()`,
-   `expect(stripComments(src)).toMatch(...)`, etc.). El test falla en rojo
-   porque el codigo no lo cumple — eso es **exactamente el comportamiento
-   correcto**: un hallazgo de seguridad documentado en el reporte.
-4. Documentar el hallazgo en `_recommendations.md` con el detalle del
-   control faltante y la recomendacion concreta.
-
-**El reporte muestra el hallazgo (rojo). El auditor lo ve. El equipo lo
-arregla. El skill cumple su trabajo.** Ese es el flujo correcto.
-
-#### Esta regla es UNIVERSAL — aplica a los 57 items del checklist
-
-NO hay items "exentos" de esta regla. Por defecto, **ningun item del
-checklist se marca como N/A**. Para marcar N/A, hay que verificar
-explicitamente con `grep` que la superficie de la feature no existe
-en el proyecto.
-
-**Items que PUEDEN ser N/A** (feature-dependientes, lista cerrada):
-
-| Item | Es N/A solo si... | Verificacion (grep en src/) |
-|------|-------------------|------------------------------|
-| R28 — Account Recovery | El proyecto usa auth externa (SSO/OAuth) y NO tiene flujo propio de recuperacion | `grep -r "forgot.password\|reset.password\|recovery" src/` → 0 resultados |
-| R29 — Remember Me | No hay feature "recordarme" en el login | `grep -r "rememberMe\|remember.me\|persistent.login" src/` → 0 resultados |
-| R32 — Token Rotation | El proyecto usa SOLO access tokens cortos, sin refresh | `grep -r "refreshToken\|refresh.token\|/refresh" src/` → 0 resultados |
-| R35 — Session Inactivity | El proyecto es 100% stateless (no usa sesiones server-side) | `grep -r "express-session\|@nestjs/passport.*session\|sessionTimeout" src/` → 0 resultados |
-| R57-R63 — File Upload | El proyecto NO acepta uploads de archivos | `grep -r "multer\|FileInterceptor\|UploadedFile\|multipart/form-data" src/` → 0 resultados |
-| R6 — Robots/Sitemap | El backend no sirve contenido publico (solo APIs internas) | Verificar que no hay `@Public()` ni rutas servidas a no-autenticados |
-
-**Items que NUNCA pueden ser N/A** (universales — todo backend web los tiene):
-
-- R3, R4, R5 — Cualquier backend tiene responses e inputs.
-- R8 — Cualquier API HTTP devuelve errores.
-- R9, R11 — Cualquier endpoint recibe input que validar.
-- R10 — Cualquier sistema produce logs.
-- R13-R20 — Si hay autenticacion (la hay siempre en sistemas GOES).
-- R21-R27 — Si hay endpoints privados o registro/login.
-- R30, R31, R33, R34 — RBAC, password storage, validacion de token.
-- R37 — Cualquier app con base de datos.
-- R38-R41 — CORS aplica a toda API expuesta a un frontend.
-- R42, R51 — Cookies aplica si hay sesion o JWT en cookie (lo normal).
-- R43 — Debug mode aplica a toda app.
-- R44-R50 — Security headers aplican a toda respuesta HTTP.
-- R52-R54 — Metodos HTTP aplican a toda API.
-- R55 — Rate limiting aplica a toda API publica.
-
-**Si un item universal no esta implementado**: HALLAZGO (test rojo),
-no N/A. Por ejemplo:
-
-- Proyecto sin helmet → R44-R50 fallan en rojo (no se marcan N/A).
-- Proyecto sin rate limiting global → R55 falla en rojo (no se marca N/A).
-- Proyecto con queries raw concatenadas → R37 falla en rojo (no se marca N/A).
-
-**Procedimiento obligatorio antes de marcar cualquier item como N/A**:
-
-1. Revisar la tabla "Items que PUEDEN ser N/A" arriba. Si el item no
-   esta listado → **NO ES N/A**. Generar el test igual.
-2. Si el item esta listado, ejecutar el `grep` correspondiente sobre
-   `src/`. Si encuentra `>0` resultados → **NO ES N/A**.
-3. Solo si los pasos 1 y 2 confirman ausencia total de la superficie,
-   marcar `t.notApplicable('motivo verificable + comando grep usado')`.
-
-Ejemplo correcto de N/A:
-```typescript
-t.notApplicable(
-  'Backend no acepta file uploads. Verificado: ' +
-  'grep -r "multer|FileInterceptor|UploadedFile" src/ → 0 resultados, ' +
-  'package.json no incluye multer ni @nestjs/platform-express file extras.'
-);
-```
-
-Ejemplo INCORRECTO (que esta regla prohibe):
-```typescript
-// ❌ Marca N/A porque "el codigo no implementa magic bytes"
-t.notApplicable('Project does not validate magic bytes');
-// ↑ ESTO ES UN HALLAZGO, NO UN N/A. La superficie (uploads) existe.
-```
-
-### Regla critica: items NO aplicables (notApplicable)
-
-Cuando un item del checklist GOES, OWASP o GOES no aplica al proyecto bajo
-test (ej: R57-R60 sobre file upload en un backend que no acepta archivos,
-MFA en un servicio sin sesiones de usuario, SSRF en una API sin egress
-externo, etc.) generar igualmente el test con metadata completa, pero usar
-`t.notApplicable('Razon especifica y verificable')` en vez de assertions
-reales:
-
-```typescript
-it('R57-R60 — File upload rules NO aplican', async () => {
-  const t = report();
-  t.epic('Archivos');
-  t.feature('File Upload Security');
-  t.story('Backend NO maneja archivos');
-  t.severity('blocker');
-  t.tag('GOES Checklist R57', 'GOES Checklist R58', 'GOES Checklist R59', 'GOES Checklist R60');
-
-  t.notApplicable('Backend no acepta uploads: no usa multer, no expone @UseInterceptors(FileInterceptor), no tiene endpoints multipart/form-data');
-
-  await t.flush();
-});
-```
-
-Reglas:
-- **NO usar `it.skip(...)`** — el body no se ejecuta y se pierde toda la
-  metadata (epic, feature, tags). El item queda invisible en el reporte.
-- **NO omitir el test** — el checklist GOES requiere trazabilidad explicita
-  de los 57 items, incluso los no aplicables.
-- **La razon debe ser verificable** — referenciar lo que SE BUSCO y NO se
-  encontro (paquetes no instalados, decoradores no usados, endpoints no
-  expuestos), no una afirmacion vaga ("no aplica al modulo").
-- En `AllureCompat`: `allure.notApplicable('reason')` funciona igual.
-
-El reporter marca estos tests como skipped (⊘ amarillo) con badge `N/A`,
-y muestra la razon en un callout dentro del modal de detalle. El stat card
-"Not Applicable" aparece cuando hay 1 o mas tests asi.
-
-### Regla critica: flush()
-
-Cada test DEBE llamar `await t.flush()` (o `await allure.flush()`) al final. Sin flush, la metadata no se escribe y el reporte no tendra los detalles del test.
-
----
-
-## CHECKLIST COMPLETO DE CIBERSEGURIDAD GOES
-
-Este es el checklist oficial. Cada item DEBE tener al menos 1 test que lo cubra.
-El tag de trazabilidad es `GOES Checklist Rxx` donde xx es el numero de fila.
-
-### CATEGORIA 1: Contenido Web
-
-| ID | Tarea | Epic | Feature sugerida | Severity |
-|----|-------|------|------------------|----------|
-| R3 | No dejar contenido sensible (llaves, IDs, info personal) en archivos del proyecto | Seguridad | Sensitive Data Exposure | critical |
-| R4 | No exponer JS sensible o logica de negocio | Seguridad | Business Logic Exposure | critical |
-| R5 | Sanitizar entrada de datos (probar inyeccion de scripts) | Seguridad | XSS Prevention / Input Sanitization | blocker |
-| R6 | Si el sitio es publico, configurar Robot.txt y sitemap.xml | Configuracion | Public Site Config | minor |
-
-### CATEGORIA 2: Entrada y salida de datos por el servidor
-
-| ID | Tarea | Epic | Feature sugerida | Severity |
-|----|-------|------|------------------|----------|
-| R8 | Mensajes 2xx, 4xx, 5xx genericos. **Body de error = `{statusCode, message}` exclusivamente** (sin `path`, `timestamp`, `stack`, `req.url`) | Seguridad | Generic Error Messages | critical |
-| R9 | Validacion por rol o permiso dentro del servidor | Autenticacion | RBAC Enforcement | blocker |
-| R10 | Eliminar todo log visible por el usuario | Seguridad | Log Exposure Prevention | critical |
-| R11 | Validacion de tipo de datos via DTO, longitud de campo, max registros, **bloquear campos extras** (`forbidNonWhitelisted: true`); contrasenas: min 12 / max 32, sin reglas de complejidad arbitrarias | Dominio | DTO Validation / Input Constraints | critical |
-
-### CATEGORIA 3: Autenticacion, registro y acciones de usuarios
-
-| ID | Tarea | Epic | Feature sugerida | Severity |
-|----|-------|------|------------------|----------|
-| R13 | Tiempo de vida bajo para access token (5 min) y refresh token | Seguridad | Token Lifetime Enforcement | critical |
-| R14 | Auth failures: MFA, rate limit, session management, **+ captcha en endpoints publicos sensibles** (`verify-dui`, `register`, `forgot-password`, `recover-password`, `verify-email`, `contact`) | Seguridad | Auth Failure Handling | blocker |
-| R15 | Encriptacion bcrypt, Argon2 o PBKDF2 en hashing | Seguridad | Password Hashing Strength | blocker |
-| R16 | Uso de algoritmo RS256 para firma de tokens | Seguridad | JWT Signing Algorithm | blocker |
-| R17 | Session ID minimo 128 bits de entropia | Seguridad | Session ID Entropy | critical |
-| R18 | Session ID regenerado post-login | Seguridad | Session Fixation Prevention | critical |
-| R19 | Validar signature, exp, iat, iss, aud en cada request | Seguridad | JWT Claims Validation | blocker |
-| R20 | NO almacenar datos sensibles en el payload del JWT | Seguridad | JWT Payload Security | critical |
-| R21 | Bloquear navegacion forzada a rutas no autorizadas | Autenticacion | Forced Browsing Prevention | critical |
-| R22 | 404 para cualquier ruta que no coincida con las definidas | Configuracion | Unknown Route Handling | normal |
-| R23 | Proteccion contra IDOR | Seguridad | IDOR Prevention | blocker |
-| R24 | Usuarios con bajo privilegio no acceden a acciones de alto privilegio | Autenticacion | Privilege Escalation Prevention | blocker |
-| R25 | Mismo usuario no puede registrarse repetidamente | Autenticacion | Duplicate Registration Prevention | critical |
-| R26 | No aceptar disposable emails | Autenticacion | Disposable Email Rejection | normal |
-| R27 | Bloquear cuenta tras 3-5 intentos fallidos | Seguridad | Brute Force Protection | blocker |
-| R28 | Metodo de recuperacion de cuenta | Autenticacion | Account Recovery | critical |
-| R29 | Si hay "recuerdame", la contrasena debe estar encriptada | Seguridad | Remember Me Security | critical |
-| R30 | Almacenamiento de contrasena del lado del servidor | Seguridad | Server-side Password Storage | blocker |
-| R31 | No permitir usar el username como password | Seguridad | Weak Password Prevention | critical |
-| R32 | Renovar refresh token despues de cada uso (rotacion) | Seguridad | Token Rotation | blocker |
-| R33 | Validar token en cada peticion privada | Autenticacion | Token Validation Per Request | blocker |
-| R34 | Implementar RBAC | Autenticacion | Role-Based Access Control | blocker |
-| R35 | Sistema de inactividad (timeout de sesion). **Idle timeout independiente del `exp` del JWT**: si no hay actividad en 30 min, sesion revocada server-side aunque el token siga vigente | Seguridad | Session Inactivity Timeout | critical |
-
-### CATEGORIA 4: Configuracion
-
-| ID | Tarea | Epic | Feature sugerida | Severity |
-|----|-------|------|------------------|----------|
-| R37 | Implementar ORM (no queries raw) | Seguridad | ORM Usage / SQL Injection Prevention | blocker |
-| R38 | CORS: Access-Control-Allow-Origin solo origenes permitidos | Configuracion | CORS Origin Restriction | critical |
-| R39 | CORS: Access-Control-Allow-Methods solo metodos permitidos | Configuracion | CORS Methods Restriction | critical |
-| R40 | Access-Control-Allow-Credentials: true solo si necesario | Configuracion | CORS Credentials Policy | normal |
-| R41 | Access-Control-Max-Age: 3600 | Configuracion | CORS Preflight Cache | normal |
-| R42 | Cookies con HttpOnly, Secure, SameSite | Seguridad | Cookie Security Flags | blocker |
-| R43 | Debug mode deshabilitado | Configuracion | Debug Mode Disabled | critical |
-| R44 | Content-Security-Policy configurado **SIN `unsafe-inline`, `unsafe-eval`, `unsafe-hashes` ni wildcard `*`** en ninguna directiva | Configuracion | CSP Header | critical |
-| R45 | X-Content-Type-Options nosniff, X-Frame-Options DENY | Configuracion | Security Headers (XCT, XFO) | critical |
-| R46 | Strict-Transport-Security (HSTS) | Configuracion | HSTS Header | critical |
-| R47 | X-XSS-Protection 0 (deprecado, usar CSP) | Configuracion | XSS Protection Header | normal |
-| R48 | Referrer-Policy strict-origin-when-cross-origin | Configuracion | Referrer Policy Header | normal |
-| R49 | Permissions-Policy geolocation=(), camera=(), microphone=() | Configuracion | Permissions Policy Header | normal |
-| R50 | Cache-Control no-store para respuestas sensibles | Configuracion | Cache Control Header | critical |
-| R51 | Cookie max-age = refresh token duration | Configuracion | Cookie Lifetime Alignment | critical |
-| R52 | Deshabilitar metodo PUT | Configuracion | HTTP PUT Disabled | normal |
-| R53 | Deshabilitar metodo TRACE | Configuracion | HTTP TRACE Disabled | critical |
-| R54 | Deshabilitar http override | Configuracion | HTTP Override Disabled | critical |
-| R55 | Rate limit: 100 req/min normal, 5 req/min login | Seguridad | Rate Limiting | blocker |
-
-### CATEGORIA 5: Manejo de archivos
-
-| ID | Tarea | Epic | Feature sugerida | Severity |
-|----|-------|------|------------------|----------|
-| R57 | Validar extension de archivo y magic byte | Archivos | File Extension + Magic Byte Validation | blocker |
-| R58 | Whitelist de extensiones permitidas | Archivos | File Extension Whitelist | blocker |
-| R59 | Limitar tamano de archivo | Archivos | File Size Limit | critical |
-| R60 | Renombrar archivos con UUID | Archivos | File UUID Rename | critical |
-| R61 | Almacenar archivos FUERA del root del proyecto (S3, storage externo, ruta absoluta fuera del arbol servido) | Archivos | File Storage Outside Webroot | critical |
-| R62 | Servir archivos con `Content-Disposition: attachment` (evita render inline / XSS drive-by via SVG/HTML) | Archivos | Content-Disposition Header | critical |
-| R63 | Escanear archivos de texto (PDF, Excel, Word) en busca de codigo malicioso antes de procesar | Archivos | Malware / Content Scanning | blocker |
-
----
-
-## OWASP TOP 10 — Tests requeridos
-
-Cada item debe tener al menos 1 test con tag `OWASP Axx`.
-
-| ID | Vulnerabilidad | Tests a generar | Tag |
-|----|---------------|-----------------|-----|
-| A01 | Broken Access Control | IDOR, Privilege Escalation, Forced Browsing, Missing Auth | OWASP A01 |
-| A02 | Cryptographic Failures | Weak Hashing, Sensitive Data in JWT, Missing TLS | OWASP A02 |
-| A03 | Injection | SQL Injection (ORM bypass), XSS, Command Injection | OWASP A03 |
-| A04 | Insecure Design | Business Logic Flaws, Missing Rate Limit | OWASP A04 |
-| A05 | Security Misconfiguration | Debug Mode, Default Creds, Missing Headers, CORS | OWASP A05 |
-| A06 | Vulnerable Components | (SCA - fuera del scope de unit tests) | OWASP A06 |
-| A07 | Auth Failures | Brute Force, Timing Attack, Weak Password, Token Replay | OWASP A07 |
-| A08 | Data Integrity Failures | (CI/CD - fuera del scope de unit tests) | OWASP A08 |
-| A09 | Logging Failures | Missing Audit Log, Sensitive Data in Logs | OWASP A09 |
-| A10 | SSRF | URL Validation, Whitelist Enforcement | OWASP A10 |
-
----
-
-## OWASP API SECURITY TOP 10 — Tests requeridos
-
-| ID | Vulnerabilidad | Tests a generar | Tag |
-|----|---------------|-----------------|-----|
-| API1 | Broken Object Level Auth | Acceder a recurso de otro usuario por ID | OWASP API1 |
-| API2 | Broken Authentication | Rate limit en login, MFA bypass | OWASP API2 |
-| API3 | Broken Object Property Auth | No exponer propiedades sensibles, DTOs por rol | OWASP API3 |
-| API4 | Unrestricted Resource Consumption | Rate limit, pagination limit, payload max | OWASP API4 |
-| API5 | Broken Function Level Auth | Admin endpoint accedido por user normal | OWASP API5 |
-| API8 | Security Misconfiguration | Headers, CORS, metodos HTTP | OWASP API8 |
-
----
-
-## GUIA GOES — Secciones de referencia
-
-Estas son las secciones de la Guia de Desarrollo Seguro GOES que deben mapearse a tests:
-
-### Seccion 3: Validacion de Entrada
-- Validar en el servidor (nunca confiar en el cliente)
-- Whitelist sobre Blacklist
-- Sanitizar y Escapar
-- Validar tipo, longitud, formato y rango
-- Canonicalizar antes de validar (UTF-8)
-
-### Seccion 4: Autenticacion y Autorizacion
-- 4.1 Politicas de Contrasenas: minimo 12 chars, verificar contra listas comprometidas, bcrypt/Argon2/PBKDF2
-- 4.2 Gestion de Sesiones: 128 bits entropia, regenerar post-login, HttpOnly/Secure/SameSite, timeout inactividad 15-30 min
-- 4.3 JWT Best Practices: RS256, validar signature/exp/iat/iss/aud, access token 15 min max, refresh en httpOnly cookie, rotacion por uso, NO datos sensibles en payload
-- 4.4 Control de Acceso RBAC/ABAC: denegar por defecto, validar en CADA endpoint, no confiar en IDs de URL, least privilege, log accesos denegados
-
-### Seccion 5: Criptografia
-- Hashing passwords: Argon2id, bcrypt, PBKDF2 (NUNCA MD5, SHA1, SHA256 solo)
-- TLS 1.2 minimo, ideal 1.3
-- NO hardcodear secretos en codigo fuente, usar vault
-
-### Seccion 6: Seguridad en APIs
-- OWASP API Security Top 10 (ver tabla arriba)
-- Rate Limiting: 5 intentos/min login, 100-1000 req/min APIs, responder 429 + Retry-After
-
-### Seccion 7: Seguridad en Base de Datos
-- SIEMPRE queries parametrizadas / ORM
-- NUNCA concatenar strings en queries
-- Principio de menor privilegio en BD
-
-### Seccion 8: Headers de Seguridad HTTP
-- Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'
-- X-Content-Type-Options: nosniff
-- X-Frame-Options: DENY (o SAMEORIGIN)
-- Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
-- X-XSS-Protection: 0 (deprecado, usar CSP)
-- Referrer-Policy: strict-origin-when-cross-origin
-- Permissions-Policy: geolocation=(), camera=(), microphone=()
-- Cache-Control: no-store (para respuestas sensibles)
-- CORS: origenes especificos, solo metodos necesarios, credentials solo si necesario, max-age 3600
-
-### Seccion 9: Manejo de Errores y Logging
-- 9.1 Errores Seguros: mensajes genericos al usuario, NUNCA exponer stack traces/queries/rutas/versiones
-- 9.2 Que Loguear: intentos login con IP/timestamp, cambios password, acceso denegado (403), operaciones admin, errores validacion, creacion/eliminacion recursos sensibles
-- 9.3 Que NO Loguear: contrasenas, tokens, API keys, tarjetas, datos personales sensibles, secretos
-
-### Seccion 10: Upload de Archivos
-- Validar extension Y magic bytes
-- Whitelist de extensiones (.pdf, .jpg, .png)
-- Limitar tamano maximo (ej: 10MB)
-- Renombrar con UUID
-- Almacenar fuera del webroot o en storage externo (S3)
-- NO ejecutar archivos subidos
-
----
-
-## PASO 6.5: Generar tests de regresion desde pentest-history.yaml (OBLIGATORIO)
-
-> **Esta capa es la que impide que un hallazgo del pentest vuelva a aparecer.**
-> Mientras los patterns (`test-patterns/*.md`) son la doctrina general, los
-> specs de regresion son la **memoria especifica** de lo que ya se rompio una vez.
-
-### Que hacer
-
-1. Leer `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
-   Es la lista de hallazgos historicos que ciberseguridad ya reporto en
-   proyectos GOES anteriores.
-
-2. Para cada entrada con `status: active | closed | accepted_risk`, generar
-   un archivo:
-
-   ```
-   test/security/regression/<VULN-ID>.regression.spec.ts
-   ```
-
-   Siguiendo EXACTAMENTE la estructura documentada en
-   `.claude/skills/goes-security-testing/references/regression-template.md`.
-
-3. Cada spec contiene UN solo `it()`, con:
-   - Tag `Pentest Regression` + el `regression_tag` exacto del YAML
-   - Reproduccion del ataque del campo `reproduce.request`
-   - Assertions traducidas mecanicamente desde `expected_defense`
-   - Descripcion con referencia al PDF original
-
-4. NO modificar el codigo de `src/`. Si la defensa no esta implementada, el
-   test falla en rojo — eso es exactamente el comportamiento esperado de
-   un test de regresion en un proyecto nuevo.
-
-5. Si la superficie del proyecto no existe (ej. el proyecto no tiene
-   endpoint `/api/reports/permits`), el spec se genera igual pero usa
-   `t.notApplicable('endpoint /api/reports/permits no existe en este proyecto')`.
-   El reporter lo muestra como skipped con badge N/A y referencia al
-   VULN-ID. Trazabilidad: 100%.
-
-### Reglas operativas inmutables
-
-- **Un archivo = un VULN-ID.** Sin agrupar, sin compartir.
-- **Un solo `it()` por archivo.** El que reproduce el ataque del PDF.
-- **NUNCA borrar un spec de regresion** — solo cambia el `status` del YAML.
-- **Cuando ciberseguridad reporta un hallazgo NUEVO**: agregar entrada al
-  YAML (no sobrescribir las anteriores), crear el spec, commit. La proxima
-  vez que la skill corra sobre cualquier proyecto, ese hallazgo queda
-  cubierto desde el dia 1.
-- **Cuando un VULN-ID se cierra**: el spec sigue corriendo en verde. NO se
-  elimina. Esa es la prueba viva de que sigue arreglado.
-
-### Trazabilidad en el reporte HTML
-
-El reporter ya muestra los tags. Con esta capa, el equipo de ciberseguridad
-puede:
-
-1. Abrir el reporte HTML del ultimo build.
-2. Buscar "Pentest Regression" en el sidebar.
-3. Ver los 9 (o N) hallazgos historicos con estado actual:
-   - Verde = defendido en este proyecto
-   - Rojo = hallazgo presente, requiere arreglo INMEDIATO
-   - Amarillo N/A = superficie no existe o riesgo aceptado
-4. Si el pentest del trimestre reporta uno de estos VULN-IDs que esta en
-   verde → **el reporte HTML es la evidencia de que la regla habia sido
-   verificada**, lo cual cambia la conversacion de "fallo del equipo" a
-   "necesidad de re-verificar la implementacion en prod vs staging".
-
-### Glosario para ciberseguridad
-
-| Tag en el reporte | Significa |
-|---|---|
-| `Pentest Regression VULN-XXX-NNNN` | Hallazgo historico del proyecto (registrado en su pentest-history.yaml) |
-| Verde sin N/A | Defensa verificada activamente |
-| Amarillo N/A "endpoint no existe" | Superficie ausente en este proyecto |
-| Amarillo N/A "Riesgo aceptado segun ADR-NN" | Decision de negocio documentada |
-| Rojo | **Hallazgo regresado — falla el build** |
-
----
-
-## PASO 7: Generar snapshot de configuracion runtime + CI gate (OBLIGATORIO)
-
-> **Esta capa congela los valores que ciberseguridad ya aprobo y bloquea el merge si driftean.**
-> Sin esto, un cambio accidental en `.env.release` (un `unsafe-inline` que se cuela,
-> un `localhost` en CORS, un timeout que sube) llega a produccion sin detectarse.
-
-### 7.1 Generar el snapshot inicial
-
-1. Copiar `.claude/skills/goes-security-testing/references/examples/security.snapshot.example.json`
-   a `test/security/security.snapshot.json`.
-2. Reemplazar `REPLACE_WITH_PROJECT_NAME` y `REPLACE_WITH_PROD_DOMAIN` con
-   los valores reales del proyecto bajo test.
-3. Ejecutar el script `scripts/security-snapshot-update.ts` (copia desde
-   `references/templates/snapshot-update.ts`) que levanta la app y captura
-   los headers reales. Cualquier campo que aparezca como `MISSING` es un
-   **hallazgo** que hay que arreglar ANTES de commitear el snapshot.
-4. Pedir review a ciberseguridad. Mergear solo con su aprobacion.
-
-### 7.2 Agregar el spec que valida contra el snapshot
-
-Copiar `references/test-patterns/31-config-snapshot.md` y crear el spec
-correspondiente: `test/security/snapshot.security-html.spec.ts`. Este spec
-corre en cada PR y reporta drift contra el snapshot aprobado.
-
-### 7.3 Configurar el CI gate
-
-1. Copiar `.claude/skills/goes-security-testing/references/templates/security-gate.yml`
-   a `.github/workflows/security-gate.yml`.
-2. Copiar `references/templates/jest-security-release.config.ts` a
-   `test/security/jest-security-release.config.ts`.
-3. Agregar al `package.json` los scripts:
-   ```json
-   {
-     "scripts": {
-       "test:security:html": "jest --config test/security/jest-security-html.config.ts --verbose",
-       "test:security:release": "jest --config test/security/jest-security-release.config.ts --verbose",
-       "test:security:snapshot:update": "ts-node scripts/security-snapshot-update.ts"
-     }
-   }
-   ```
-4. Copiar `references/examples/CODEOWNERS.example` y mergear su contenido
-   en el `.github/CODEOWNERS` del proyecto. Esto fuerza review de
-   ciberseguridad para cualquier modificacion al snapshot, a los referencias
-   de la skill, o al workflow del gate.
-5. Configurar en el repo de GitHub:
-
-### 5.a Variables y secrets (una vez por repo)
-
-**El gate NO requiere variables ni secrets para funcionar.** Testea el
-codigo del PR completo (boot local con createNestApplication), sin tocar
-ningun ambiente desplegado.
-
-**Settings -> Secrets and variables -> Actions -> Secrets (solo si queres email):**
-
-El workflow incluye un step que, tras cada merge a una rama protegida,
-genera un PDF del reporte HTML y lo envia por correo al lider de desarrollo
-(`ludwing.serapio@goes.gob.sv` por defecto, configurable en el workflow).
-
-Secrets requeridos:
-   - `SMTP_HOST`     — servidor SMTP institucional. Ejemplos:
-                       - Microsoft 365: `smtp.office365.com`
-                       - Google Workspace: `smtp.gmail.com`
-                       - GOES interno: ajustar segun infra
-   - `SMTP_USER`     — cuenta de envio (ej. `no-reply@goes.gob.sv`)
-   - `SMTP_PASSWORD` — password (o App Password si la cuenta usa MFA)
-   - `SMTP_PORT`     — opcional, default 587 (TLS); usar 465 para SSL
-   - `SMTP_SECURE`   — opcional, default `false`; setear `true` si el server requiere SSL directo
-   - `SMTP_FROM`     — opcional, default = SMTP_USER; ej. `noreply@goes.gob.sv`
-
-Si los secrets SMTP_* no estan configurados, el step de email simplemente
-falla silenciosamente y el resto del workflow continua. El PDF queda
-disponible como artifact (`security-report-pdf`) descargable manualmente.
-
-**Para cambiar el destinatario o agregar mas:**
-
-Editar `.github/workflows/security-gate.yml`, step "Enviar reporte PDF por
-correo al lider de desarrollo", campo `to:`. Soporta multiples destinatarios
-separados por coma:
-
-```yaml
-to: ludwing.serapio@goes.gob.sv,otro.lider@goes.gob.sv
-```
-
-**Cuando se envia el correo:**
-
-- Solo en eventos `push` a las ramas protegidas (`dev`, `qa`, `uat`, `main`).
-- NO se envia en cada actualizacion de PR (seria spam).
-- Es decir: cada vez que un PR se mergea, el lider recibe un correo con
-  el estado de seguridad del proyecto post-merge.
-
-### 5.b CODEOWNERS catch-all (ya esta en CODEOWNERS.example)
-   Confirmar que `.github/CODEOWNERS` tiene la regla `*` al inicio. Esto
-   hace que GitHub auto-solicite review de un CODEOWNER en CADA PR:
-
-   ```
-   *   @gerardo-amaya-dev @alejandro-montepeque-dev @angel-bran-dev @jose-orellana-dev @noe-cortez-dev
-   ```
-
-### 5.c Branch protection rule (sin bypass — flujo unico rojo->violeta)
-
-Settings -> Branches -> Add rule. Crear UNA regla por rama (`dev`, `qa`,
-`uat`, `main`):
-
-   - [x] **Require a pull request before merging**
-       - [x] **Required approving reviews: 1**
-           ← solo 1 CODEOWNER aprueba = merge habilitado
-       - [x] **Require review from Code Owners**
-       - [x] **Dismiss stale pull request approvals when new commits are pushed**
-
-   - [x] **Require status checks to pass before merging**
-       - [x] **Require branches to be up to date before merging**
-       - Status checks required (en las 4 ramas):
-         - `Verify gate integrity`
-         - `Security tests (local build)`
-         - `Checklist GOES coverage gate`
-         - `Security doctor (skill compliance)`
-
-   - [x] **Require conversation resolution before merging**
-
-   - [x] **Do not allow bypassing the above settings**
-       ← MARCAR. Nadie (ni admins) puede mergear con checks en rojo.
-          La unica forma de "aceptar" un rojo es convertirlo a riesgo
-          aceptado en el snapshot (ver 5.e).
-
-   - **Allow specified actors to bypass required pull requests**:
-       DEJAR VACIO. No hay bypass autorizado.
-
-   - [x] **Restrict who can push to matching branches**
-       - Permitir solo a los CODEOWNERS y a los GitHub Actions bots.
-
-### 5.d Comportamiento resultante (sin excepciones)
-
-| Persona | Checks verdes (incluye violeta y N/A) | Checks con rojos |
-|---------|----------------------------------------|--------------------|
-| Dev normal | 1 approval CODEOWNER -> merge habilitado | Boton gris, NO puede mergear |
-| CODEOWNER  | 1 approval -> merge habilitado | Boton gris, NO puede mergear (igual que dev) |
-| Admin del repo | Igual que CODEOWNER | Boton gris (Do not allow bypassing = checked) |
-
-### 5.e Flujo correcto para items que aparecen rojos en proyectos donde NO aplican
-
-Cuando un dev abre un PR y un test sale rojo porque el item NO aplica a
-este proyecto (ej. R6 robots.txt en un panel admin interno via VPN), el
-flujo es:
-
-1. **En el MISMO PR**, el dev agrega 2 cambios:
-
-   a) En `test/security/security.snapshot.json`, dentro de `accepted_risks[]`:
-      ```json
-      {
-        "rid": "R6",
-        "reason": "Panel admin no expuesto a Internet. Solo via VPN. No indexable.",
-        "approved_by": "@gerardo-amaya-dev",
-        "approved_at": "2026-06-04",
-        "review_at": "2026-12-04",
-        "compensating_controls": ["VPN obligatorio", "Auth Keycloak con MFA", "IP allowlist a nivel LB"]
-      }
-      ```
-
-   b) Al inicio del test correspondiente:
-      ```typescript
-      if (await t.acceptedRiskIfDeclared('R6')) {
-        await t.flush();
-        return;
-      }
-      ```
-
-2. **Push al PR**. El workflow re-corre. R6 ahora sale violeta "RIESGO ACEPTADO".
-
-3. **GitHub solicita CODEOWNERS review automaticamente** (porque tocamos
-   snapshot.json, que esta protegido). Los CODEOWNERS evaluan:
-   - ¿La razon es razonable?
-   - ¿Los compensating_controls realmente mitigan?
-   - ¿review_at es un plazo razonable?
-
-4. **Si CODEOWNER aprueba**, todos los checks pasan (verde / violeta / N/A
-   son todos "OK" para el gate), 1 review esta, branch up to date -> merge
-   habilitado.
-
-5. **A partir de ese merge**, R6 sale violeta en TODAS las ejecuciones
-   futuras hasta que `review_at` venza. Cuando vence, el equipo abre un PR
-   que renueva o quita la entrada — mismo flujo de review.
-
-### 5.f Por que esto es mejor que el bypass
-
-| | Bypass al momento del merge | Flujo rojo->violeta |
-|---|----------------------------|----------------------|
-| Decision visible | Solo en la conversacion del PR | En el JSON, queda persistente |
-| Trazabilidad | Issue auto-abierto post-merge | En git blame del snapshot |
-| Reproducibilidad | Cada PR es un caso aislado | La decision aplica a TODAS las corridas futuras |
-| Re-evaluacion | No hay mecanismo | review_at obligatorio + warning a 30 dias |
-| Riesgo de error | "Approve y olvidar" | El cambio al snapshot tiene CODEOWNERS review obligatorio |
-
-**Resultado**: el "rojo mergeado" no existe en el historial del repo.
-Solo hay tests verdes, violetas (riesgo aceptado documentado) o amarillos
-(N/A justificado con grep). Cualquier auditor puede revisar `accepted_risks`
-en el snapshot y entender el contexto de seguridad del proyecto.
-
-### 5.d Notificaciones por correo a los CODEOWNERS
-   GitHub auto-envia un correo a cada CODEOWNER cuando se le solicita
-   review (esto pasa al abrir el PR o cuando el PR toca un archivo
-   matcheado por su regla en CODEOWNERS). Cada usuario controla la
-   recepcion en https://github.com/settings/notifications:
-   - [x] Watching: Email
-   - [x] Participating: Email
-   - Categoria "Pull request reviews requested" debe estar en Email.
-
-   No hace falta SMTP custom — GitHub se encarga. Si por compliance se
-   requiere un correo adicional via SMTP institucional (no@goes.gob.sv),
-   se puede agregar un step `dawidd6/action-send-mail` al final del job
-   `security-tests-local`. Documentado pero no incluido por defecto.
-
-### 7.4 Resultado
-
-A partir de este punto:
-
-- Cualquier PR que rompa un test de seguridad: **merge bloqueado**.
-- Cualquier PR que modifique el snapshot: **requiere review de ciberseguridad**.
-- Cualquier PR a `release/**`: ademas corre la suite contra la URL deployada.
-- El reporte HTML aparece como artifact + comentario en cada PR.
-- Ciberseguridad puede auditar el ultimo reporte HTML antes de cada
-  ventana de despliegue.
-
-### 7.5 Cuando un nuevo hallazgo aparece en pentest
-
-El flujo cierra el ciclo:
-
-1. Ciberseguridad reporta un nuevo `VULN-XXX-NNNN`.
-2. Equipo de desarrollo agrega la entrada al
-   `.claude/skills/goes-security-testing/references/pentest-history.yaml`.
-3. Equipo crea `test/security/regression/VULN-XXX-NNNN.regression.spec.ts`
-   siguiendo `references/regression-template.md`.
-4. Si el hallazgo es de runtime, actualizar tambien el snapshot.
-5. El nuevo spec corre desde el primer commit. Si la defensa esta
-   implementada → verde. Si no → rojo, y el merge se bloquea hasta arreglar.
-
-A futuro, ese mismo `VULN-XXX-NNNN` queda activo para CUALQUIER otro
-proyecto que use la skill — porque vive en `.claude/skills/`, no en el
-proyecto especifico.
-
----
-
-## PASO 8: Verificacion estricta — `security:doctor` OBLIGATORIO
-
-> **Esta es la garantia final de que la skill se aplico correctamente.**
-> Si el doctor no pasa con 0 errores, la skill NO se considera aplicada
-> exitosamente. Reportar FAILURE explicito al usuario y NO emitir el
-> mensaje de "skill aplicada con exito".
-
-### 8.1 Copiar e instalar el doctor
-
-1. Copiar `.claude/skills/goes-security-testing/references/templates/security-doctor.ts`
-   a `scripts/security-doctor.ts` en el proyecto bajo test.
-2. Agregar al `package.json`:
-   ```json
-   {
-     "scripts": {
-       "security:doctor": "ts-node scripts/security-doctor.ts"
-     },
-     "devDependencies": {
-       "js-yaml": "^4.1.0",
-       "@types/js-yaml": "^4.0.9",
-       "glob": "^10.3.10"
-     }
-   }
-   ```
-3. `npm install`.
-
-### 8.2 Configurar el pre-commit hook
-
-1. Copiar `references/templates/pre-commit-pentest-history.sh` a
-   `.husky/pre-commit` (o equivalente: `lefthook.yml`, `.git/hooks/pre-commit`).
-2. Hacer `chmod +x` al hook.
-
-### 8.3 Ejecutar la verificacion final
+## PASO 6.5 — Regresión de pentest (OBLIGATORIO)
+
+Leer `references/pentest-history.yaml` (historia de hallazgos del proyecto; si no
+existe, copiar el template vacío). Por cada entry con `status: active|closed|
+accepted_risk`, generar `test/security/regression/<VULN-ID>.regression.spec.ts`
+siguiendo `references/regression-template.md`: un solo `it()`, tag `Pentest
+Regression <VULN-ID>`, reproduce el ataque de `reproduce.request`, assertions
+desde `expected_defense`. Si la superficie no existe → `t.notApplicable('motivo
+con grep')`. **Un archivo = un VULN-ID. Nunca borrar un spec de regresión** (solo
+cambia el `status` del YAML). Cada proyecto mantiene su propio YAML; no hay
+historia compartida entre proyectos.
+
+## PASO 7 — Snapshot runtime + CI gate (OBLIGATORIO)
+
+Congela los valores aprobados por ciberseguridad y bloquea merges con drift.
+Flujo completo (snapshot, spec de validación, workflow, CODEOWNERS, branch
+protection, SMTP, flujo rojo→violeta): `references/ci-gate-setup.md`.
+
+## PASO 8 — Verificación estricta `security:doctor` (OBLIGATORIO)
+
+Copiar `references/templates/security-doctor.ts` → `scripts/security-doctor.ts` y
+el pre-commit `references/templates/pre-commit-pentest-history.sh` → `.husky/pre-commit`.
+Agregar devDeps `js-yaml`, `@types/js-yaml`, `glob` y un ejecutor TS para los
+scripts auxiliares (doctor + snapshot). Canónico: **`tsx`** (funciona en CJS y
+ESM sin flags) — instalarlo si el proyecto no tiene ya `ts-node`. Script:
+`"security:doctor": "tsx scripts/security-doctor.ts"` (si el proyecto ya usa
+`ts-node`, reemplazar por `ts-node` / `ts-node --esm` en ESM). Ejecutar:
 
 ```bash
-npm run test:security:html       # Suite completa
-npm run security:doctor          # Auditoria estructural
+npm run test:security:html    # suite completa
+npm run security:doctor       # auditoría estructural
 ```
 
-Ambos comandos DEBEN salir con codigo 0. Si cualquiera falla:
+Ambos deben salir con código 0. **NO emitir "skill aplicada con éxito" si el
+doctor falla** — reportar FAILURE y listar las correcciones. NO marcar N/A para
+hacer pasar el doctor. NO modificar el doctor para que pase. El doctor corre
+también en CI.
 
-- **`test:security:html` falla**: hay tests rojos. Revisar cuales y arreglar el codigo del proyecto (o, si es un hallazgo no aplicable, justificar con `t.notApplicable(motivo)`).
-- **`security:doctor` falla**: hay piezas estructurales faltantes. El doctor imprime exactamente cuales. Resolverlas siguiendo las instrucciones que el doctor emite.
+---
 
-### 8.4 Output esperado del doctor (estado verde)
+## Checklist GOES, OWASP y Guía GOES
 
-```
-===========================================
-  GOES Security Doctor — Audit Report
-===========================================
-Proyecto: <nombre>
-Resultado: PASS (7/7)
+La fuente de verdad completa (tabla R3-R63 con epic/feature/severity, OWASP Top
+10, OWASP API Top 10, y secciones 3-10 de la Guía de Desarrollo Seguro GOES) está
+en **`references/goes-checklist.md`**. Cada item DEBE tener ≥1 test con tag
+`GOES Checklist Rxx`; cada vuln OWASP ≥1 test con tag `OWASP Axx`/`OWASP APIx`.
 
-[OK  ] CANONICAL_FILES — Archivos canonicos de la skill presentes
-[OK  ] CHECKLIST_COVERAGE — 57 items del checklist GOES cubiertos
-        57/57 cubiertos
-[OK  ] PENTEST_REGRESSION — Cada VULN-ID del pentest-history tiene su regression spec
-[OK  ] SNAPSHOT_VALID — security.snapshot.json existe, es valido y esta aprobado
-[OK  ] CI_GATE_INTEGRITY — security-gate.yml integro, sin bypasses
-[OK  ] CODEOWNERS — CODEOWNERS protege snapshot + workflow
-[OK  ] NPM_SCRIPTS — Scripts npm test:security:* declarados
-
-Reporte JSON: reports/security/doctor-report.json
-```
-
-### 8.5 Reglas para la IA al aplicar la skill
-
-1. **NO emitir "skill aplicada con exito" si el doctor falla.** Reportar
-   FAILURE al usuario y listar las correcciones necesarias.
-2. **NO marcar items como N/A para hacer pasar el doctor.** Si un item
-   requiere `t.notApplicable()`, debe tener motivo verificable con grep.
-3. **NO modificar `security-doctor.ts` para que pase.** Si una verificacion
-   falla, el codigo del proyecto debe ajustarse, no el doctor.
-4. **El doctor se integra al CI gate** (`security-gate.yml` job `security-doctor`),
-   por lo que aunque la IA lo "pase" localmente, en CI se vuelve a correr.
-
-### 8.6 Flujo de hallazgo nuevo
-
-Ver `references/templates/pentest-ingest.md`. Resumen:
-
-1. Ciberseguridad entrega PDF.
-2. Equipo agrega entries al `pentest-history.yaml`.
-3. Equipo crea `test/security/regression/<VULN-ID>.regression.spec.ts`.
-4. Si requiere snapshot, actualizar `security.snapshot.json` (review de CODEOWNERS).
-5. `npm run security:doctor` debe pasar.
-6. PR + merge + push.
-7. A partir de ese momento, ese VULN-ID queda cubierto en CUALQUIER proyecto
-   futuro que aplique la skill — porque el YAML vive en `.claude/skills/`.
+Categorías: 1 Contenido Web (R3-R6) · 2 I/O servidor (R8-R11) · 3 Auth/registro
+(R13-R35) · 4 Configuración (R37-R55) · 5 Archivos (R57-R63).
 
 ---
 
 ## NOTAS IMPORTANTES PARA LA IA
 
-1. **NUNCA generar tests vacios o placeholder** — cada test debe tener assertions reales contra el codigo del proyecto.
-2. **Analizar el codigo real ANTES de escribir tests** — y no solo el `.service.ts`. Leer ademas, segun aplique: el `.controller.ts` (decoradores, rutas), los DTOs (`class-validator`), los guards/pipes/interceptors/filters/middleware del recurso, los decoradores custom (`@Roles`, `@Public`, `@CurrentUser`, etc.), los helpers/utils que hagan hashing/comparacion/sanitizacion, `main.ts` (pipes globales, helmet, CORS), y la entity/schema correspondiente. Sin esto, los tests asumen comportamientos que no existen y dan falsos positivos.
-3. **Si un item del checklist no aplica** al servicio/proyecto actual (ej: R57-R60 si no maneja archivos), generar el test con metadata completa y llamar `t.notApplicable('motivo verificable')` en vez de assertions. Aparece como skipped (⊘) con badge N/A. NUNCA usar `it.skip(...)` ni omitir el item — se pierde la trazabilidad GOES.
-4. **Priorizar tests de seguridad** sobre tests funcionales. Cada servicio debe tener al minimo:
-   - Tests funcionales (CRUD/logica) con epic 'Dominio'
-   - Tests de validacion de entrada con epic 'Seguridad'
-   - Tests de autorizacion si aplica con epic 'Autenticacion'
-5. **Los comentarios en el codigo van SIN tildes** (ASCII puro). Los strings de metadata (descriptions, steps, stories, epic, feature, story) deben ir en **espanol** con tildes, para que el reporte HTML generado sea consistente con la interfaz del reporter (que esta toda en espanol).
-6. **Respetar el tsconfig.json del proyecto.** Si `ignoreDeprecations` esta en "5.0", NO cambiarlo a "6.0".
-7. **Cada test debe ser independiente** — no depender del orden de ejecucion ni de estado compartido.
-8. **Usar mocks del ORM** (Prisma, TypeORM, etc.) — no conectar a BD real en unit tests.
-9. **Cada test DEBE terminar con `await t.flush()`** — sin esto la metadata no llega al reporte.
-10. **NO instalar Allure, allure-commandline ni Java** — este sistema usa un reporter custom puro Node.js que genera HTML directamente.
-11. **El reporter html-reporter.js DEBE ser JavaScript puro** — Jest carga reporters con `require()`, no pasa por ts-jest. Si necesitas modificarlo, no lo conviertas a TypeScript.
-12. **Los archivos de spec deben terminar en `.security-html.spec.ts`** — este es el patron que el jest config busca.
-13. **Cada test DEBE registrar al menos un par input + output en `t.evidence(...)`** — un evidence sin contraparte es incompleto. El primero captura el estado/payload de entrada, el segundo el resultado/respuesta. Ver "Regla critica: evidence (input + output)" mas arriba para nombres recomendados por tipo de test.
-14. **Pentest regression specs**: ademas de los patterns, generar
-    `test/security/regression/VULN-XXX-NNNN.regression.spec.ts` por cada
-    entrada activa en `references/pentest-history.yaml` siguiendo
-    `references/regression-template.md`. La skill NO puede dejar fuera
-    un VULN-ID con status `active`, `closed` o `accepted_risk`. Si la
-    superficie no existe en el proyecto bajo test, usar
-    `t.notApplicable('motivo verificable con grep')`.
-15. **Modo audit-only (opt-in via prompt)** — si el usuario incluye en su mensaje una instruccion del tipo *"NO modifiques codigo fuente"*, *"solo generar tests sin arreglar src/"*, *"audit-only mode"* o equivalente, respetarla estrictamente: dejar tests rojos como hallazgos, NO tocar archivos de aplicacion (`src/`, `main.ts`, controllers, services, DTOs, guards), solo modificar `test/security/`, `package.json`, `eslint.config.mjs`, `.gitignore` y `.claude/`. Si el usuario NO lo pide explicitamente, Claude tiene el comportamiento estandar (puede sugerir y aplicar fixes si lo considera apropiado).
+1. **Nunca tests vacíos/placeholder** — assertions reales contra el código del proyecto.
+2. **Analizar el código real ANTES de escribir** (PASO 1, no solo `.service.ts`).
+3. **Detectar y respetar el runner del proyecto** (PASO 0). No imponer Jest ni Vitest.
+4. **Item no aplicable** → `t.notApplicable('motivo verificable con grep')`, nunca
+   `it.skip` ni omitir. Si la superficie existe pero falta la defensa → HALLAZGO
+   (rojo), no N/A. Ver `decision-rules.md`.
+5. **Comentarios en código SIN tildes (ASCII)**; strings de metadata (epic,
+   feature, story, steps, descriptions) en **español con tildes** (el reporter
+   está en español).
+6. **Respetar `tsconfig.json`** del proyecto (no cambiar `ignoreDeprecations`, etc.).
+7. **Tests independientes** — sin depender de orden ni estado compartido.
+8. **Mockear el ORM** (Prisma/TypeORM) — no BD real en unit tests (ver `_orm-mocks.md`).
+9. **Cada test termina con `await t.flush()`**.
+10. **El reporter es JS puro y universal** — no convertir `html-reporter.js` a TS.
+    Una sola clase sirve a Jest y Vitest. Si necesitás tocar la ingesta de un
+    runner, hacelo en su hook (`onRunComplete` Jest / `onTestRunEnd`+`onFinished`
+    Vitest); el
+    core `renderReport` es compartido — no lo dupliques.
+11. **Specs terminan en `.security-html.spec.ts`** (patrón que buscan ambos configs).
+12. **≥1 par input+output en `t.evidence(...)`** por test.
+13. **Regresión:** generar specs por cada VULN-ID activo de `pentest-history.yaml`.
+14. **Modo audit-only (opt-in):** si el usuario pide *"no modifiques src/"*,
+    *"solo generar tests"* o *"audit-only"*, no tocar `src/`/`main.ts`/controllers/
+    services/DTOs/guards; dejar tests rojos como hallazgos; solo modificar
+    `test/security/`, `package.json`, `eslint.config.mjs`, `.gitignore`, `.claude/`.
+15. **Reportar solo el trabajo concreto, no la evolución de la skill.** NUNCA
+    informar al usuario que la skill cambió de versión, que "antes se evaluaba
+    distinto", que ahora soporta otro runner, ni comparar con corridas previas
+    ni narrar migraciones internas. El reporte al usuario se limita a: qué specs
+    se generaron, cobertura del checklist (N/57), hallazgos (rojos), N/A
+    justificados, riesgos aceptados, y el resultado de `test:security:html` +
+    `security:doctor`. Si la skill es más nueva que la última corrida del
+    proyecto, adaptarse en silencio: aplicar el comportamiento actual sin avisos
+    de cambio.

@@ -1,6 +1,6 @@
 # goes-security-skill
 
-A Claude Code skill that **generates, runs, and reports automated security tests** for **NestJS + Jest** projects, aligned with the **GOES Cybersecurity Checklist** (60 rows, 54 actionable items), **OWASP Top 10 (2021)**, and **OWASP API Security Top 10 (2023)**.
+A Claude Code skill that **generates, runs, and reports automated security tests** for **NestJS** projects — **runner-agnostic** (auto-detects and uses Jest *or* Vitest, without imposing one) — aligned with the **GOES Cybersecurity Checklist** (57 items), **OWASP Top 10 (2021)**, and **OWASP API Security Top 10 (2023)**.
 
 The output is a single self-contained HTML report — no server, no external assets — designed for compliance audits in government environments.
 
@@ -11,7 +11,7 @@ The output is a single self-contained HTML report — no server, no external ass
 1. The user copies the `.claude/` folder from this repo into a NestJS project.
 2. In Claude Code, the user types a short trigger like *"Generate security tests for this project with the goes-security-testing skill"*.
 3. Claude reads `SKILL.md`, exhaustively maps the project's security surface (controllers, DTOs, guards, pipes, interceptors, filters, middleware, custom decorators, helpers, `main.ts`, entities/schemas — not just `*.service.ts`), and generates one `.security-html.spec.ts` per relevant module with full metadata (epic, feature, story, severity, GOES + OWASP tags, input/output evidence).
-4. Claude configures Jest with the bundled custom HTML reporter and runs the suite.
+4. Claude configures the project's test runner (Jest or Vitest, detected — never imposed) with the bundled universal HTML reporter and runs the suite.
 5. The output is `reports/security/security-report.html` — a single auditable file.
 
 The bundled reporter is pure Node.js JavaScript.
@@ -91,7 +91,13 @@ Reporter:
 Generate security tests for this project with the goes-security-testing skill.
 ```
 
-The skill reads `SKILL.md`, scans the project, generates tests, configures Jest, runs the suite, and produces the HTML report. `projectName` defaults to the value in `package.json#name`. By default this falls under Mode 2 (standard).
+**Prompt recomendado (español, un solo paso):**
+
+```
+Aplica la skill goes-security-testing a este proyecto NestJS: genera los tests de seguridad y el reporte HTML del checklist GOES. Corre el doctor al final.
+```
+
+The skill reads `SKILL.md`, detects the project's test runner (Jest or Vitest) without imposing one, scans the project, generates tests, configures the security suite, runs it, produces the HTML report, and finishes with `npm run security:doctor`. `projectName` defaults to the value in `package.json#name`. By default this falls under Mode 2 (standard).
 
 ### Replace `[Sistema]` / `[System Name]`
 
@@ -182,7 +188,7 @@ Click any row to open. Contents:
 
 ### GOES Cybersecurity Checklist
 
-54 actionable items grouped in 5 categories:
+57 actionable items grouped in 5 categories:
 
 | Category | Range | What it covers |
 |---|---|---|
@@ -204,9 +210,9 @@ API1 (Object Level Auth), API2 (Broken Auth), API3 (Object Property Auth — par
 
 API6, API9, API10 are on the roadmap.
 
-### Test patterns (22)
+### Test patterns (32)
 
-The skill ships with 22 reusable patterns under [references/test-patterns/](.claude/skills/goes-security-testing/references/test-patterns/):
+The skill ships with 32 reusable patterns under [references/test-patterns/](.claude/skills/goes-security-testing/references/test-patterns/). Use [`INDEX.md`](.claude/skills/goes-security-testing/references/test-patterns/INDEX.md) (checklist item → pattern file) to open only the one you need:
 
 CRUD/DTO validation · XSS sanitization · Error handling · JWT security · Password security · Brute force · Timing attacks · Replay attacks · RBAC · IDOR · Session management · Forced browsing · Registration security · CORS · Cookie security · HTTP security headers · Debug & HTTP methods · SQL injection / ORM · Rate limiting · File upload · Audit log · Logout flow.
 
@@ -236,7 +242,7 @@ Such tests render as **skipped** (⊘) with a **Skipped** badge and a yellow cal
 
 ## Reporter customization
 
-Pass options to the bundled reporter in `test/security/jest-security-html.config.ts`:
+Pass options to the bundled reporter in `test/security/security.config.ts`:
 
 ```typescript
 [
@@ -253,7 +259,7 @@ Two environment variables help in CI / parallel runs:
 
 | Variable | Purpose |
 |---|---|
-| `SECURITY_REPORTER_RUN_ID` | Subdir per run under `$TMPDIR/security-html-reporter/<runId>` — required when running Jest with `--maxWorkers > 1` or when several CI jobs share a runner. |
+| `SECURITY_REPORTER_RUN_ID` | Subdir per run under `$TMPDIR/security-html-reporter/<runId>` — required when the runner executes in parallel (Jest `--maxWorkers > 1`, Vitest threads/forks) or when several CI jobs share a runner. |
 | `SECURITY_REPORTER_TEMP_DIR` | Full override of the metadata tempdir (use it when you need the metadata under your CI workspace). |
 
 See [`_html-reporter-customization.md`](.claude/skills/goes-security-testing/references/test-patterns/_html-reporter-customization.md) for branding, badge classification, GitHub Actions / GitLab CI snippets, and troubleshooting.
@@ -266,25 +272,25 @@ See [`_html-reporter-customization.md`](.claude/skills/goes-security-testing/ref
 .claude/skills/goes-security-testing/
 ├── SKILL.md                          ← instructions for Claude
 ├── reporter/
-│   ├── html-reporter.js              ← Jest custom reporter (~2300 lines, JS)
-│   └── metadata.ts                   ← metadata collector + AllureCompat
+│   ├── html-reporter.js              ← universal Jest/Vitest reporter (~3900 lines, JS)
+│   ├── metadata.ts                   ← metadata collector + AllureCompat
+│   └── smoke.js                      ← Node-only smoke test (Jest + Vitest paths)
 └── references/
-    ├── goes-checklist.md             ← 60-row GOES checklist
-    └── test-patterns/                ← 21 patterns + support files
+    ├── goes-checklist.md             ← GOES checklist (57 items) + OWASP + guide
+    ├── runner-setup.md               ← runner detection, configs, version matrix
+    ├── decision-rules.md             ← Hallazgo vs N/A vs Riesgo Aceptado
+    ├── ci-gate-setup.md              ← CI gate, snapshot, branch protection
+    └── test-patterns/                ← 32 patterns + INDEX + support files
+        ├── INDEX.md                  ← item → pattern map
         ├── _setup.md
-        ├── _e2e-setup.md
-        ├── _orm-mocks.md
-        ├── _html-reporter-customization.md
-        ├── _severity-guide.md
-        ├── _recommendations.md
         ├── 01-crud-validation.md
         ├── ...
-        └── 21-audit-log.md
+        └── 32-defense-validation.md
 ```
 
-The reporter consists of two files:
+The reporter consists of:
 
-- **`reporter/html-reporter.js`** — Jest custom reporter (pure JavaScript, ~2300 lines). Reads metadata JSON files written by tests, merges with Jest results, generates a self-contained HTML.
+- **`reporter/html-reporter.js`** — universal reporter (pure JavaScript). A single class works as a Jest reporter (`onRunComplete`) and a Vitest reporter (`onInit` + `onTestRunEnd` for Vitest 4 / `onFinished` for ≤3), sharing one `renderReport` core. Reads metadata JSON files written by tests, merges with the runner's results, generates a self-contained HTML.
 - **`reporter/metadata.ts`** — metadata collector. Exposes `report()` and `AllureCompat`. Each test registers epic, feature, story, severity, tags, parameters, steps, evidence, and optionally `notApplicable(reason)`.
 
 ---
@@ -297,7 +303,7 @@ A full presentation guide is at [`docs/DEMO.md`](docs/DEMO.md), including a 12-m
 
 ## Requirements
 
-- **NestJS** project with Jest configured
+- **NestJS** project with **Jest or Vitest** (auto-detected; if neither is present the skill asks which one to install — only that one)
 - **Node.js 18+**
 - **Claude Code** (or Claude Cowork) for skill activation
 
@@ -306,6 +312,23 @@ No Java required.
 ---
 
 ## Changelog
+
+### v2.0 (2026-06)
+
+**Runner-agnostic**
+- **Universal reporter** — one `html-reporter.js` works as both a Jest reporter (`onRunComplete`) and a Vitest reporter (`onInit` + `onTestRunEnd` for **Vitest 4** / `onFinished` for ≤3), sharing one render core. Test-name matching normalizes Jest's space vs Vitest's `>` separators.
+- **PASO 0 runner detection** — detects and uses the project's runner (Jest/Vitest) without imposing one; if none or another runner (Mocha/Jasmine) is present, asks the user which to install (Jest or Vitest, only one). Supported-version matrix with notify-and-ask when out of range; never degrades project deps.
+- **Single config name** — `security.config.ts` / `security.setup.ts` / `security-release.config.ts` (no `jest-`/`vitest-` prefix).
+
+**Robustness & anti-regression**
+- Specs that **fail to load** (Jest `testExecError` / Vitest collection error) now surface as a **red** test instead of vanishing from the report.
+- Reporter emits `window.__GOES_STATS__` for the CI coverage gate; warns when 0 tests cross metadata (e.g. missing Vitest `globals:true` or `flush()`).
+- **`reporter/smoke.js`** — Node-only dual-runner smoke test guarding the reporter across future changes.
+- **Stricter doctor** — new `SPEC_AUTHORING` (flush + evidence) and `RUNNER_WIRING` checks; CI-gate check now strips comments/echo before scanning (no false-FAIL on self-reference).
+- Pattern 31 (config snapshot) no longer boots `AppModule` locally — N/A + static check locally, runtime drift in the release job.
+
+**Token efficiency**
+- `SKILL.md` slimmed ~80% (router + on-demand `references/`); pattern `INDEX.md` (item → file); tightened `description`.
 
 ### v1.2 (2026-04)
 

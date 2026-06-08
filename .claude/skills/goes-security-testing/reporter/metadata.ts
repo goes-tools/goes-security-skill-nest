@@ -28,7 +28,7 @@ import * as crypto from 'crypto';
 
 // ─── Temp directory for metadata files ─────────────────────────
 //
-// Concurrency: when Jest runs in parallel (--maxWorkers > 1) or when several
+// Concurrency: when the runner (Jest/Vitest) runs in parallel or when several
 // CI jobs share the same machine, every worker process must scope its
 // metadata to a unique subdirectory; otherwise the reporter would merge
 // unrelated runs.

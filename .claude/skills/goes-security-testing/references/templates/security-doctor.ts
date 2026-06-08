@@ -37,13 +37,15 @@ function read(p: string): string {
 // ============================================================
 // 1. Archivos canonicos de la skill
 // ============================================================
+// Config unico de la suite de seguridad (mismo nombre sea Jest o Vitest).
 const REQUIRED_FILES = [
-  'test/security/jest-security-html.config.ts',
+  'test/security/security.config.ts',
   'test/security/security.snapshot.json',
   '.github/workflows/security-gate.yml',
   '.github/CODEOWNERS',
 ];
 const missingFiles = REQUIRED_FILES.filter((f) => !exists(f));
+
 checks.push({
   id: 'CANONICAL_FILES',
   description: 'Archivos canonicos de la skill presentes',
@@ -190,11 +192,19 @@ let gateProblems: string[] = [];
 const GATE_PATH = '.github/workflows/security-gate.yml';
 if (exists(GATE_PATH)) {
   const gateContent = read(GATE_PATH);
-  // Buscar continue-on-error: true (con flexibilidad de espacios)
-  if (/continue-on-error\s*:\s*true/i.test(gateContent)) {
+  // "comentario = ausente": el propio gate menciona estos tokens en comentarios
+  // y mensajes echo del job verify-gate-integrity. Evaluamos los regex de bypass
+  // sobre el YAML SIN comentarios (#...) ni líneas de echo, para no dar
+  // falso-FAIL por autoreferencia.
+  const gateScannable = gateContent
+    .split('\n')
+    .map((l) => l.replace(/#.*$/, ''))
+    .filter((l) => !/echo\s+["']/.test(l))
+    .join('\n');
+  if (/continue-on-error\s*:\s*true/i.test(gateScannable)) {
     gateProblems.push('continue-on-error: true detectado — gate puede ser bypaseado');
   }
-  if (/if\s*:\s*false/i.test(gateContent)) {
+  if (/if\s*:\s*false/i.test(gateScannable)) {
     gateProblems.push('if: false detectado — algun step esta deshabilitado');
   }
   // Jobs canonicos
@@ -272,7 +282,54 @@ checks.push({
 });
 
 // ============================================================
-// 8. Tests pasan (opcional — solo en modo --with-tests)
+// 8. Autoria de specs: cada spec llama flush() y registra evidence
+// ============================================================
+const authoringProblems: string[] = [];
+for (const specPath of specs) {
+  const rel = path.relative(ROOT, specPath);
+  const src = fs.readFileSync(specPath, 'utf-8');
+  if (!/\b(it|test)\s*\(/.test(src)) continue; // sin tests, nada que validar
+  if (!/\.flush\s*\(/.test(src)) {
+    authoringProblems.push(`${rel}: ningun .flush() — la metadata no llega al reporte`);
+  }
+  if (!/\.(evidence|attachment)\s*\(/.test(src)) {
+    authoringProblems.push(`${rel}: sin .evidence(...) — falta el par input/output`);
+  }
+}
+checks.push({
+  id: 'SPEC_AUTHORING',
+  description: 'Cada spec llama flush() y registra evidence',
+  passed: authoringProblems.length === 0,
+  missing: authoringProblems,
+});
+
+// ============================================================
+// 9. Wiring del runner: el config referencia el reporter universal
+// ============================================================
+const wiringProblems: string[] = [];
+const CONFIG_PATH = 'test/security/security.config.ts';
+if (exists(CONFIG_PATH)) {
+  const cfg = read(CONFIG_PATH);
+  if (!cfg.includes('html-reporter.js')) {
+    wiringProblems.push('security.config.ts no referencia reporter/html-reporter.js');
+  }
+  // Si es config de Vitest, exigir globals:true (metadata.ts usa expect.getState()).
+  const isVitest = /vitest|defineConfig/.test(cfg);
+  if (isVitest && !/globals\s*:\s*true/.test(cfg)) {
+    wiringProblems.push('config Vitest sin globals:true — la metadata saldra vacia');
+  }
+} else {
+  wiringProblems.push('test/security/security.config.ts no existe');
+}
+checks.push({
+  id: 'RUNNER_WIRING',
+  description: 'El config de seguridad referencia el reporter (+ globals:true en Vitest)',
+  passed: wiringProblems.length === 0,
+  missing: wiringProblems,
+});
+
+// ============================================================
+// 10. Tests pasan (opcional — solo en modo --with-tests)
 // ============================================================
 // El doctor NO ejecuta los tests; eso lo hace el CI gate. El doctor
 // verifica que la estructura este correcta antes de pasar a tests.
@@ -331,6 +388,8 @@ if (!allPassed) {
   console.log('- Si CI_GATE_INTEGRITY falla -> restaurar workflow desde la skill');
   console.log('- Si CODEOWNERS falla -> mergear contenido de CODEOWNERS.example al CODEOWNERS del proyecto');
   console.log('- Si NPM_SCRIPTS falla -> agregar los scripts al package.json');
+  console.log('- Si SPEC_AUTHORING falla -> agregar await t.flush() y t.evidence(input/output) a los specs');
+  console.log('- Si RUNNER_WIRING falla -> security.config.ts debe referenciar html-reporter.js (y globals:true en Vitest)');
   process.exit(1);
 }
 

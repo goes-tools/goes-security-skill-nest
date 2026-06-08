@@ -1,4 +1,4 @@
-// test/security/jest-security-release.config.ts
+// test/security/security-release.config.ts
 //
 // Config alterna de Jest que corre la misma suite de seguridad pero
 // contra un ambiente desplegado (staging, release, prod). Usar:
