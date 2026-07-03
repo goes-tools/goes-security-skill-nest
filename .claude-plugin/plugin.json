@@ -1,0 +1,7 @@
+{
+  "name": "goes-security-skill-nest",
+  "description": "Skill de seguridad (checklist GOES + OWASP) para proyectos NestJS",
+  "version": "1.0.0",
+  "author": { "name": "Goes Tools" },
+  "repository": "https://github.com/goes-tools/goes-security-skill-nest"
+}
